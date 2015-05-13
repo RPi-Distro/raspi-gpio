@@ -2,7 +2,7 @@ Source: raspi-gpio
 Section: utils
 Priority: optional
 Maintainer: Serge Schneider <serge@raspberrypi.org>
-Build-Depends: debhelper (>= 8.0.0), dh-autoreconf
+Build-Depends: debhelper (>= 9.0.0), dh-autoreconf
 Standards-Version: 3.9.4
 Homepage: https://www.raspberrypi.org/
 Vcs-Git: https://github.com/RPi-Distro/raspi-gpio.git -b debian
