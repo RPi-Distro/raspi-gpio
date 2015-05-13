@@ -1,0 +1,16 @@
+Source: raspi-gpio
+Section: utils
+Priority: optional
+Maintainer: Serge Schneider <serge@raspberrypi.org>
+Build-Depends: debhelper (>= 8.0.0), dh-autoreconf
+Standards-Version: 3.9.4
+Homepage: https://www.raspberrypi.org/
+Vcs-Git: https://github.com/RPi-Distro/raspi-gpio.git -b debian
+Vcs-Browser: https://github.com/RPi-Distro/raspi-gpio/tree/debian
+
+Package: raspi-gpio
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Dump the state of the BCM270x GPIOs
+ This tool prints out one line per BCM270x GPIO pin giving the current value
+ on the pin, and the function it is currently set to in the GPFSELx registers.
