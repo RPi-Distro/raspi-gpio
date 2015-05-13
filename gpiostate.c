@@ -205,10 +205,13 @@ int main (int argc, char *argv[])
   {
     printf("mmap (GPIO) failed: %s\n", strerror (errno)) ;
     return 1;
-  }  
+  }
 
   for(n = 0; n < 54; n++)
   {
+    if(n==0) printf("\nBANK0:\n");
+    if(n==28) printf("\nBANK1:\n");
+    if(n==46) printf("\nBANK2:\n");
     fsel = get_gpio_fsel(n);
     gpio_fsel_to_namestr(n, fsel, name);
     level = get_gpio_level(n);
