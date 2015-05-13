@@ -1,4 +1,4 @@
-raspi-gpio (0.1-1-1) unstable; urgency=low
+raspi-gpio (0.1-1-1) stable; urgency=low
 
   * Initial release
 
