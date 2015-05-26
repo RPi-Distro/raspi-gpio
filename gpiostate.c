@@ -284,6 +284,12 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
 void print_help()
 {
   char *name = "gpiostate"; /* in case we want to rename */
+  printf("\n");
+  printf("WARNING! %s set writes directly to the GPIO control registers\n", name);
+  printf("ignoring whatever else may be using them (such as Linux drivers) -\n");
+  printf("it is designed as a debug tool, only use it if you know what you\n");
+  printf("are doing and at your own risk!\n");
+  printf("\n");
   printf("The %s tool is designed to help hack / debug BCM283x GPIO.\n", name);
   printf("Running %s with no arguments prints this help.\n", name);
   printf("%s can get and print the state of a GPIO (or all GPIOs)\n", name);
