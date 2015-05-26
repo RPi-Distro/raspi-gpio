@@ -1,9 +1,14 @@
 /*
- * Reads GPIO state and dumps to console
- * 
- * use gcc -o gpiostate gpiostate.c
- * 
- * */
+  Reads GPIO state and dumps to console,  allows GPIO hacking
+  Use:
+    gpiostate             print help
+    gpiostate -help       print help
+    gpiostate help        print help
+    gpiostate get         dump all GPIO state
+    gpiostate get 23      dump GPIO23 state
+    gpiostate set 23 f6   set GPIO23 fsel=6
+    gpiostate set 23 pu/pd/pn
+*/
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -74,6 +79,11 @@ char *gpio_alt_names[54*6] =
 "SD0_DAT3"  , "PWM1"       , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"    , "-"
 };
 
+char *gpio_fsel_alts[8] = 
+{
+  "", "", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
+};
+
 #define BCM2708_PERI_BASE 0x20000000
 #define BCM2709_PERI_BASE 0x3F000000
 
@@ -84,8 +94,40 @@ char *gpio_alt_names[54*6] =
 #define PROC_TYPE_BCM2708 0
 #define PROC_TYPE_BCM2709 1
 
+#define GPSET0    7
+#define GPSET1    8
+#define GPCLR0    10
+#define GPCLR1    11
+#define GPLEV0    13
+#define GPLEV1    14
+#define GPPUD     37 
+#define GPPUDCLK0 38 
+#define GPPUDCLK1 39
+
+
 /* Pointer to HW */
 static volatile uint32_t *gpio_base ;
+
+void delay_us(uint32_t delay)
+{
+  struct timespec tv_req;
+  struct timespec tv_rem;
+  int i;
+  uint32_t del_ms, del_us;
+  del_ms = delay / 1000;
+  del_us = delay % 1000;
+  for(i=0; i<=del_ms; i++)
+  {
+    tv_req.tv_sec = 0;
+    if(i==del_ms) tv_req.tv_nsec = del_us*1000;
+    else          tv_req.tv_nsec = 1000000;
+    tv_rem.tv_sec = 0;
+    tv_rem.tv_nsec = 0;
+    nanosleep(&tv_req, &tv_rem);
+    if(tv_rem.tv_sec != 0 || tv_rem.tv_nsec != 0)
+      printf("timer oops!\n");
+  }
+}
 
 int get_cpu_type(void)
 {
@@ -135,17 +177,59 @@ int get_gpio_fsel(int gpio)
   return (int)((*(gpio_base+reg))>>(3*sel))&0x7;
 }
 
+int set_gpio_fsel(int gpio, int fsel)
+{
+  static volatile uint32_t *tmp;
+  uint32_t reg = gpio / 10;
+  uint32_t sel = gpio % 10;
+  uint32_t mask;
+  if(gpio < 0 || gpio > 53) return -1;
+  tmp = gpio_base+reg;
+  mask = 0x7<<(3*sel);
+  mask = ~mask;
+  printf("reg = %d, sel = %d, mask=%08X\n", reg, sel, mask);
+  tmp = gpio_base+reg;
+  *tmp = *tmp & mask;
+  *tmp = *tmp | ((fsel&0x7)<<(3*sel));
+  return (int)((*tmp)>>(3*sel))&0x7;
+}
+
 int get_gpio_level(int gpio)
 {
   if(gpio < 0 || gpio > 53) return -1;
   if(gpio < 32)
   {
-    return ((*(gpio_base+13))>>gpio)&0x1;
+    return ((*(gpio_base+GPLEV0))>>gpio)&0x1;
   } else
   {
     gpio = gpio-32;
-    return ((*(gpio_base+14))>>gpio)&0x1;
+    return ((*(gpio_base+GPLEV1))>>gpio)&0x1;
   }
+}
+
+int set_gpio_value(int gpio, int value)
+{
+  if(gpio < 0 || gpio > 53) return -1;
+  if(value != 0)
+  {
+    if(gpio < 32) {
+      *(gpio_base+GPSET0) = 0x1<<gpio;
+    }
+    else {
+      value -= 32;
+      *(gpio_base+GPSET1) = 0x1<<gpio;
+    }
+  } else 
+  {
+    if(gpio < 32) {
+      *(gpio_base+GPCLR0) = 0x1<<gpio;
+    }
+    else {
+      value -= 32;
+      *(gpio_base+GPCLR1) = 0x1<<gpio;
+    }
+  }
+  return 0;
 }
 
 int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
@@ -168,11 +252,85 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
   return sprintf(name, "%s", gpio_alt_names[gpio*6 + altfn]);
 }
 
+void print_help()
+{
+  printf("The gpiostate tool is designed to help hack / debug BCM283x GPIO.\n");
+  printf("Running gpiostate with no arguments prints this help.\n");
+  printf("gpiostate can get and print the state of a GPIO (or all GPIOs)\n");
+  printf("and can be used to set the function, pulls and value of a GPIO.\n");
+  printf("gpiostate must be run as root.\n");
+  printf("Use:\n");
+  printf("  gpiostate get [GPIO]\n");
+  printf("OR\n");
+  printf("  gpiostate set <GPIO> [options]\n");
+  printf("Note that omitting [GPIO] from gpiostate get prints all GPIOs\n");
+  printf("Valid [options] for gpiostate set are:\n");
+  printf("  ip      set GPIO as input\n");
+  printf("  op      set GPIO as output\n");
+  printf("  a0-a5   set GPIO to alternate function alt0-alt5\n");
+  printf("  pu      set GPIO in-pad pull up\n");
+  printf("  pd      set GPIO pin-pad pull down\n");
+  printf("  pn      set GPIO pull none (no pull)\n");
+  printf("  dh      set GPIO to drive to high (1) level (only valid if set to be an output)\n");
+  printf("  dl      set GPIO to drive low (0) level (only valid if set to be an output)\n");
+}
+
+/*int gpio_fsel_to_alt(int f)
+{
+  switch(f)
+  {
+    case  0: return -1;
+    case  1: return -1;
+    case  2: return  5;
+    case  3: return  4;
+    case  4: return  0;
+    case  5: return  1;
+    case  6: return  2;
+    default: break;
+  }
+  return  3;
+}*/
+
+/*
+ * type:
+ *   0 = no pull
+ *   1 = pull down
+ *   2 = pull up
+ */
+int gpio_set_pull(int gpio, int type)
+{
+  if(gpio < 0 || gpio > 53) return -1;
+  if(type < 0 || type > 2) return -1;
+
+  if(gpio < 32) {
+    *(gpio_base+GPPUD) = type;
+    delay_us(10);
+    *(gpio_base+GPPUDCLK0) = 0x1<<gpio;
+    delay_us(10);
+    *(gpio_base+GPPUD) = 0;
+    delay_us(10);
+    *(gpio_base+GPPUDCLK0) = 0;
+    delay_us(10);
+  } else {
+    gpio -= 32;
+    *(gpio_base+GPPUD) = type;
+    delay_us(10);
+    *(gpio_base+GPPUDCLK1) = 0x1<<gpio;
+    delay_us(10);
+    *(gpio_base+GPPUD) = 0;
+    delay_us(10);
+    *(gpio_base+GPPUDCLK1) = 0;
+    delay_us(10);
+  }
+}
+
 int main (int argc, char *argv[])
 {
 
   int fd;
   int n;
+
+  int ret;
 
   int cpu_type;
 
@@ -180,14 +338,127 @@ int main (int argc, char *argv[])
   char name[512];
   int level;
 
+  /* arg parsing */
+
+  int set = 0; 
+  int get = 0; 
+  int pullup = 0; 
+  int pulldn = 0; 
+  int pullnone = 0;
+  int fsparam = -1;
+  int pinnum = -1;
+  int drivehigh = 0;
+  int drivelow = 0;
+
+  if(argc < 2)
+  {
+    print_help();
+    return 0;
+  }
+
+  /* argc 2 or greater, next arg must be set, get or help */
+  get = strcmp(argv[1], "get") == 0;
+  set = strcmp(argv[1], "set") == 0;
+  if(!set && !get)
+  {
+    printf("Unknown argument \"%s\"\n", argv[1]);
+    print_help();
+    return 1;
+  }
+
+  if(get && (argc > 3))
+  {
+    printf("Too many arguments, use gpiostate get <gpionumber>\n");
+    return 1;
+  }
+
+  if(argc < 3 && set)
+  {
+    printf("Need GPIO number to set\n");
+    return 1;
+  }
+
+  if(argc > 2) /* expect pin number next */
+  {
+    ret = sscanf(argv[2], "%d", &pinnum);
+    if(ret != 1 || pinnum < 0 || pinnum > 53)
+    {
+      printf("Unknown GPIO \"%s\"\n", argv[2]);
+      return 1;
+    }
+  }
+
+  /* parse remainng args */
+  for(n = 3; n < argc; n++) { 
+    if(strcmp(argv[n], "dh") == 0) {
+      drivehigh = 1;
+    } else 
+    if(strcmp(argv[n], "dl") == 0) {
+      drivelow = 1;
+    } else 
+    if(strcmp(argv[n], "ip") == 0) {
+      fsparam = 0;
+    } else 
+    if(strcmp(argv[n], "op") == 0) {
+      fsparam = 1;
+    } else 
+    if(strcmp(argv[n], "a0") == 0) {
+      fsparam = 4;
+    } else 
+    if(strcmp(argv[n], "a1") == 0) {
+      fsparam = 5;
+    } else
+    if(strcmp(argv[n], "a2") == 0) {
+      fsparam = 6;
+    } else
+    if(strcmp(argv[n], "a3") == 0) {
+      fsparam = 7;
+    } else
+    if(strcmp(argv[n], "a4") == 0) {
+      fsparam = 3;
+    } else
+    if(strcmp(argv[n], "a5") == 0) {
+      fsparam = 2;
+    } else
+    if(strcmp(argv[n], "pu") == 0) {
+      pullup = 1;
+    } else
+    if(strcmp(argv[n], "pd") == 0) {
+      pulldn = 1; 
+    } else
+    if(strcmp(argv[n], "pn") == 0) {
+      pullnone = 1;
+    } else
+    {
+      printf("unknown argument \"%s\"\n", argv[n]);
+    }
+  }
+
+#if 0
+  printf("argc = %d\n", argc);
+  printf("set = %d\n", set); 
+  printf("get = %d\n", get);
+  printf("pullup = %d\n", pullup);
+  printf("pulldown = %d\n", pulldn);
+  printf("pullnone = %d\n", pullnone);
+  printf("fsparam = %d\n", fsparam);
+  printf("pinnum = %d\n", pinnum);
+  printf("drivehigh = %d\n", drivehigh);
+  printf("drivelow = %d\n", drivelow);
+#endif
+
+  /* end arg parsing */
+
+  if (geteuid())
+  {
+    printf("gpiostate must be run as root\n");
+    return 0;
+  }
+
   /* 2708 or 2709? */
   cpu_type = get_cpu_type();
 
-  if(cpu_type==0)
-    printf("Found a BCM2708\n");
-  else if(cpu_type==1)
-    printf("Found a BCM2709\n");
-  else
+  if(cpu_type > 1 || cpu_type < 0)
     return 1;
 
   if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
@@ -207,15 +478,65 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  for(n = 0; n < 54; n++)
-  {
-    if(n==0) printf("\nBANK0:\n");
-    if(n==28) printf("\nBANK1:\n");
-    if(n==46) printf("\nBANK2:\n");
-    fsel = get_gpio_fsel(n);
-    gpio_fsel_to_namestr(n, fsel, name);
-    level = get_gpio_level(n);
-    printf("GPIO %02d: fsel=%d level=%d, func=%s\n", n, fsel, level, name);
+  if(get) {
+    if(pinnum < 0) {
+      for(n = 0; n < 54; n++)
+      {
+        if(n==0) printf("BANK0 (GPIO 0 to 27):\n");
+        if(n==28) printf("BANK1 (GPIO 28 to 45):\n");
+        if(n==46) printf("BANK2 (GPIO 46 to 53):\n");
+        fsel = get_gpio_fsel(n);
+        gpio_fsel_to_namestr(n, fsel, name);
+        level = get_gpio_level(n);
+        if(fsel < 2)
+          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, "    ", name);
+        else
+          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
+      }
+    } else {
+      /* print for single pin */
+      fsel = get_gpio_fsel(pinnum);
+      gpio_fsel_to_namestr(pinnum, fsel, name);
+      level = get_gpio_level(pinnum);
+      if(fsel < 2)
+        printf("GPIO %d: level=%d fsel=%d func=%s\n", pinnum, level, fsel, name);
+      else
+        printf("GPIO %d: level=%d fsel=%d alt=%s func=%s\n", pinnum, level, fsel, gpio_fsel_alts[fsel], name);
+    }
+  }
+
+  if(set) {
+
+    /* set function */
+    if(fsparam >= 0) {
+      set_gpio_fsel(pinnum, fsparam);
+    }
+
+    /* set output value (check pin is output first) */
+    if(drivehigh || drivelow) {
+      printf("get_gpio_fsel=%d\n", get_gpio_fsel(pinnum));
+      if(get_gpio_fsel(pinnum) == 1) {
+        if(drivehigh)
+          set_gpio_value(pinnum, 1);
+        else
+          set_gpio_value(pinnum, 0);
+      } else {
+        printf("Can't set pin value, not an output\n");
+        return 1;
+      }
+    }
+    
+    /* set pulls */
+    if(pullnone) {
+      gpio_set_pull(pinnum, 0);
+    } else
+    if(pulldn) {
+      gpio_set_pull(pinnum, 1);
+    } else
+    if(pullup) {
+      gpio_set_pull(pinnum, 2);
+    }
+
   }
 
   return 0;
