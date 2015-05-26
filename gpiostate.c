@@ -374,7 +374,7 @@ int main (int argc, char *argv[])
 
   if(get && (argc > 3))
   {
-    printf("Too many arguments, use gpiostate get <gpionumber>\n");
+    printf("Too many arguments\n");
     return 1;
   }
 
@@ -436,7 +436,8 @@ int main (int argc, char *argv[])
       pullnone = 1;
     } else
     {
-      printf("unknown argument \"%s\"\n", argv[n]);
+      printf("Unknown argument \"%s\"\n", argv[n]);
+      return 1;
     }
   }
 
@@ -457,7 +458,7 @@ int main (int argc, char *argv[])
 
   if (geteuid())
   {
-    printf("gpiostate must be run as root\n");
+    printf("Must be root\n");
     return 0;
   }
 
