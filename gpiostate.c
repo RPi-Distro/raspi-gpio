@@ -78,6 +78,19 @@ char *gpio_fsel_alts[8] =
   "", "", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
 };
 
+/* 0 = none, 1 = down, 2 = up */
+int gpio_default_pullstate[54] = 
+{
+  2,2,2,2,2,2,2,2,2, /*GPIO0-8 UP*/
+  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /*GPIO9-27 DOWN*/
+  0,0, /*GPIO28-29 NONE*/
+  1,1,1,1, /*GPIO30-33 DOWN*/
+  2,2,2, /*GPIO34-36 UP*/
+  1,1,1,1,1,1,1, /*GPIO37-43 DOWN*/
+  0,0, /*GPIO44-45 NONE*/
+  2,2,2,2,2,2,2,2 /*GPIO46-53 UP*/
+};
+
 #define BCM2708_PERI_BASE 0x20000000
 #define BCM2709_PERI_BASE 0x3F000000
 
@@ -101,6 +114,28 @@ char *gpio_fsel_alts[8] =
 
 /* Pointer to HW */
 static volatile uint32_t *gpio_base ;
+
+void print_gpio_alts_table()
+{
+  int gpio;
+  int alt;
+  printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
+  for(gpio = 0; gpio < 54; gpio++)
+  {
+    printf("%d", gpio);
+    if(gpio_default_pullstate[gpio] == 0)
+      printf(", NONE");
+    else if(gpio_default_pullstate[gpio] == 1)
+      printf(", DOWN");
+    else
+      printf(", UP");
+    for(alt=0; alt < 6; alt++)
+    {
+      printf(", %s", gpio_alt_names[gpio*6+alt]);
+    }
+    printf("\n");
+  }
+}
 
 void delay_us(uint32_t delay)
 {
@@ -258,7 +293,10 @@ void print_help()
   printf("  %s get [GPIO]\n", name);
   printf("OR\n");
   printf("  %s set <GPIO> [options]\n", name);
-  printf("Note that omitting [GPIO] from %s get prints all GPIOs\n", name);
+  printf("OR\n");
+  printf("  %s funcs\n", name);
+  printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
+  printf("%s funcs will dump all the possible GPIO alt funcions in CSV format.\n", name);
   printf("Valid [options] for %s set are:\n", name);
   printf("  ip      set GPIO as input\n");
   printf("  op      set GPIO as output\n");
@@ -359,6 +397,12 @@ int main (int argc, char *argv[])
   if(argc < 2)
   {
     print_help();
+    return 0;
+  }
+
+  if(argc==2 && (strcmp(argv[1], "funcs") == 0))
+  {
+    print_gpio_alts_table();
     return 0;
   }
 
