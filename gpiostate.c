@@ -1,6 +1,7 @@
 /*
   Reads GPIO state and dumps to console.
   Allows GPIO hacking to set and get GPIO state.
+  Author: James Adams
 */
 
 #include <stdio.h>
@@ -72,7 +73,7 @@ char *gpio_alt_names[54*6] =
 "SD0_DAT3"  , "PWM1"       , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"    , "-"
 };
 
-char *gpio_fsel_alts[8] = 
+char *gpio_fsel_alts[8] =
 {
   "", "", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
 };
@@ -93,8 +94,8 @@ char *gpio_fsel_alts[8] =
 #define GPCLR1    11
 #define GPLEV0    13
 #define GPLEV1    14
-#define GPPUD     37 
-#define GPPUDCLK0 38 
+#define GPPUD     37
+#define GPPUDCLK0 38
 #define GPPUDCLK1 39
 
 
@@ -161,7 +162,7 @@ int get_cpu_type(void)
 
 int get_gpio_fsel(int gpio)
 {
-  /* GPIOFSEL0-GPIOFSEL5 with 10 sels per 32 bit reg, 
+  /* GPIOFSEL0-GPIOFSEL5 with 10 sels per 32 bit reg,
      3 bits per sel (so bits 0:29 used) */
   uint32_t reg = gpio / 10;
   uint32_t sel = gpio % 10;
@@ -212,7 +213,7 @@ int set_gpio_value(int gpio, int value)
       value -= 32;
       *(gpio_base+GPSET1) = 0x1<<gpio;
     }
-  } else 
+  } else
   {
     if(gpio < 32) {
       *(gpio_base+GPCLR0) = 0x1<<gpio;
@@ -345,10 +346,10 @@ int main (int argc, char *argv[])
 
   /* arg parsing */
 
-  int set = 0; 
-  int get = 0; 
-  int pullup = 0; 
-  int pulldn = 0; 
+  int set = 0;
+  int get = 0;
+  int pullup = 0;
+  int pulldn = 0;
   int pullnone = 0;
   int fsparam = -1;
   int pinnum = -1;
@@ -394,22 +395,22 @@ int main (int argc, char *argv[])
   }
 
   /* parse remainng args */
-  for(n = 3; n < argc; n++) { 
+  for(n = 3; n < argc; n++) {
     if(strcmp(argv[n], "dh") == 0) {
       drivehigh = 1;
-    } else 
+    } else
     if(strcmp(argv[n], "dl") == 0) {
       drivelow = 1;
-    } else 
+    } else
     if(strcmp(argv[n], "ip") == 0) {
       fsparam = 0;
-    } else 
+    } else
     if(strcmp(argv[n], "op") == 0) {
       fsparam = 1;
-    } else 
+    } else
     if(strcmp(argv[n], "a0") == 0) {
       fsparam = 4;
-    } else 
+    } else
     if(strcmp(argv[n], "a1") == 0) {
       fsparam = 5;
     } else
@@ -429,7 +430,7 @@ int main (int argc, char *argv[])
       pullup = 1;
     } else
     if(strcmp(argv[n], "pd") == 0) {
-      pulldn = 1; 
+      pulldn = 1;
     } else
     if(strcmp(argv[n], "pn") == 0) {
       pullnone = 1;
@@ -441,7 +442,7 @@ int main (int argc, char *argv[])
 
 #if 0
   printf("argc = %d\n", argc);
-  printf("set = %d\n", set); 
+  printf("set = %d\n", set);
   printf("get = %d\n", get);
   printf("pullup = %d\n", pullup);
   printf("pulldown = %d\n", pulldn);
@@ -519,7 +520,6 @@ int main (int argc, char *argv[])
 
     /* set output value (check pin is output first) */
     if(drivehigh || drivelow) {
-      printf("get_gpio_fsel=%d\n", get_gpio_fsel(pinnum));
       if(get_gpio_fsel(pinnum) == 1) {
         if(drivehigh)
           set_gpio_value(pinnum, 1);
@@ -530,7 +530,7 @@ int main (int argc, char *argv[])
         return 1;
       }
     }
-    
+
     /* set pulls */
     if(pullnone) {
       gpio_set_pull(pinnum, 0);
