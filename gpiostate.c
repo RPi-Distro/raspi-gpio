@@ -1,13 +1,6 @@
 /*
-  Reads GPIO state and dumps to console,  allows GPIO hacking
-  Use:
-    gpiostate             print help
-    gpiostate -help       print help
-    gpiostate help        print help
-    gpiostate get         dump all GPIO state
-    gpiostate get 23      dump GPIO23 state
-    gpiostate set 23 f6   set GPIO23 fsel=6
-    gpiostate set 23 pu/pd/pn
+  Reads GPIO state and dumps to console.
+  Allows GPIO hacking to set and get GPIO state.
 */
 
 #include <stdio.h>
