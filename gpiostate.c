@@ -180,7 +180,7 @@ int set_gpio_fsel(int gpio, int fsel)
   tmp = gpio_base+reg;
   mask = 0x7<<(3*sel);
   mask = ~mask;
-  printf("reg = %d, sel = %d, mask=%08X\n", reg, sel, mask);
+  /*printf("reg = %d, sel = %d, mask=%08X\n", reg, sel, mask);*/
   tmp = gpio_base+reg;
   *tmp = *tmp & mask;
   *tmp = *tmp | ((fsel&0x7)<<(3*sel));
@@ -247,17 +247,18 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
 
 void print_help()
 {
-  printf("The gpiostate tool is designed to help hack / debug BCM283x GPIO.\n");
-  printf("Running gpiostate with no arguments prints this help.\n");
-  printf("gpiostate can get and print the state of a GPIO (or all GPIOs)\n");
+  char *name = "gpiostate"; /* in case we want to rename */
+  printf("The %s tool is designed to help hack / debug BCM283x GPIO.\n", name);
+  printf("Running %s with no arguments prints this help.\n", name);
+  printf("%s can get and print the state of a GPIO (or all GPIOs)\n", name);
   printf("and can be used to set the function, pulls and value of a GPIO.\n");
-  printf("gpiostate must be run as root.\n");
+  printf("%s must be run as root.\n", name);
   printf("Use:\n");
-  printf("  gpiostate get [GPIO]\n");
+  printf("  %s get [GPIO]\n", name);
   printf("OR\n");
-  printf("  gpiostate set <GPIO> [options]\n");
-  printf("Note that omitting [GPIO] from gpiostate get prints all GPIOs\n");
-  printf("Valid [options] for gpiostate set are:\n");
+  printf("  %s set <GPIO> [options]\n", name);
+  printf("Note that omitting [GPIO] from %s get prints all GPIOs\n", name);
+  printf("Valid [options] for %s set are:\n", name);
   printf("  ip      set GPIO as input\n");
   printf("  op      set GPIO as output\n");
   printf("  a0-a5   set GPIO to alternate function alt0-alt5\n");
@@ -266,6 +267,17 @@ void print_help()
   printf("  pn      set GPIO pull none (no pull)\n");
   printf("  dh      set GPIO to drive to high (1) level (only valid if set to be an output)\n");
   printf("  dl      set GPIO to drive low (0) level (only valid if set to be an output)\n");
+  printf("Examples:\n");
+  printf("  %s get              Prints state of all GPIOs one per line\n", name);
+  printf("  %s get 20           Prints state of GPIO20\n", name);
+  printf("  %s set 20 a5        Set GPIO20 to ALT5 function (GPCLK0)\n", name);
+  printf("  %s set 20 pu        Enable GPIO20 ~50k in-pad pull up\n", name);
+  printf("  %s set 20 pd        Enable GPIO20 ~50k in-pad pull down\n", name);
+  printf("  %s set 20 op        Set GPIO20 to be an output\n", name);
+  printf("  %s set 20 dl        Set GPIO20 to output low/zero (must already be set as an output)\n", name);
+  printf("  %s set 20 ip pd     Set GPIO20 to input with pull down\n", name);
+  printf("  %s set 35 a0 pu     Set GPIO35 to ALT0 function (SPI_CE1_N) with pull up\n", name);
+  printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and drving high\n", name);
 }
 
 /*int gpio_fsel_to_alt(int f)
