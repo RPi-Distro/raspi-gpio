@@ -1,2 +1,2 @@
-bin_PROGRAMS = gpiostate
-gpiostate_SOURCES = gpiostate.c
+bin_PROGRAMS = raspi-gpio
+raspi_gpio_SOURCES = raspi-gpio.c
