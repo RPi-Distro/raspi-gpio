@@ -1,3 +1,11 @@
+raspi-gpio (0.20150527) jessie; urgency=low
+
+  * Change source format to native
+  * Merge commits up to 7a20153f3ba21e20af3bfb04bc2c717a6017e2ba
+  * Bump standards version
+
+ -- Serge Schneider <serge@raspberrypi.org>  Wed, 27 May 2015 13:37:47 +0100
+
 raspi-gpio (0.1-1) stable; urgency=low
 
   * Initial release
