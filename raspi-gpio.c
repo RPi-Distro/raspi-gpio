@@ -283,7 +283,7 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
 
 void print_help()
 {
-  char *name = "gpiostate"; /* in case we want to rename */
+  char *name = "raspi-gpio"; /* in case we want to rename */
   printf("\n");
   printf("WARNING! %s set writes directly to the GPIO control registers\n", name);
   printf("ignoring whatever else may be using them (such as Linux drivers) -\n");
