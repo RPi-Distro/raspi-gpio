@@ -115,25 +115,30 @@ int gpio_default_pullstate[54] =
 /* Pointer to HW */
 static volatile uint32_t *gpio_base ;
 
+void print_gpio_alts_info(int gpio)
+{
+  int alt;
+  printf("%d", gpio);
+  if(gpio_default_pullstate[gpio] == 0)
+    printf(", NONE");
+  else if(gpio_default_pullstate[gpio] == 1)
+    printf(", DOWN");
+  else
+    printf(", UP");
+  for(alt=0; alt < 6; alt++)
+  {
+    printf(", %s", gpio_alt_names[gpio*6+alt]);
+  }
+  printf("\n");
+}
+
 void print_gpio_alts_table()
 {
   int gpio;
-  int alt;
   printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
   for(gpio = 0; gpio < 54; gpio++)
   {
-    printf("%d", gpio);
-    if(gpio_default_pullstate[gpio] == 0)
-      printf(", NONE");
-    else if(gpio_default_pullstate[gpio] == 1)
-      printf(", DOWN");
-    else
-      printf(", UP");
-    for(alt=0; alt < 6; alt++)
-    {
-      printf(", %s", gpio_alt_names[gpio*6+alt]);
-    }
-    printf("\n");
+    print_gpio_alts_info(gpio);
   }
 }
 
@@ -300,7 +305,7 @@ void print_help()
   printf("OR\n");
   printf("  %s set <GPIO> [options]\n", name);
   printf("OR\n");
-  printf("  %s funcs\n", name);
+  printf("  %s funcs [GPIO]\n", name);
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
   printf("%s funcs will dump all the possible GPIO alt funcions in CSV format.\n", name);
   printf("Valid [options] for %s set are:\n", name);
@@ -376,6 +381,7 @@ int main (int argc, char *argv[])
 
   int set = 0;
   int get = 0;
+  int funcs = 0;
   int pullup = 0;
   int pulldn = 0;
   int pullnone = 0;
@@ -390,12 +396,6 @@ int main (int argc, char *argv[])
     return 0;
   }
 
-  if(argc==2 && (strcmp(argv[1], "funcs") == 0))
-  {
-    print_gpio_alts_table();
-    return 0;
-  }
-
   if(strcmp(argv[1], "help") == 0)
   {
     print_help();
@@ -405,13 +405,14 @@ int main (int argc, char *argv[])
   /* argc 2 or greater, next arg must be set, get or help */
   get = strcmp(argv[1], "get") == 0;
   set = strcmp(argv[1], "set") == 0;
-  if(!set && !get)
+  funcs = strcmp(argv[1], "funcs") == 0;
+  if(!set && !get && !funcs)
   {
     printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
     return 1;
   }
 
-  if(get && (argc > 3))
+  if((get || funcs) && (argc > 3))
   {
     printf("Too many arguments\n");
     return 1;
@@ -500,6 +501,14 @@ int main (int argc, char *argv[])
 #endif
 
   /* end arg parsing */
+
+  if(funcs) {
+    if (pinnum == -1)
+      print_gpio_alts_table();
+    else
+      print_gpio_alts_info(pinnum);
+    return 0;
+  }
 
   if (geteuid())
   {
