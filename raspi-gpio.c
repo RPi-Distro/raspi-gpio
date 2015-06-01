@@ -444,6 +444,12 @@ int main (int argc, char *argv[])
     }
   }
 
+  if(set && argc < 4)
+  {
+      printf("Nothing to set\n");
+      return 0;
+  }
+
   /* parse remainng args */
   for(n = 3; n < argc; n++) {
     if(strcmp(argv[n], "dh") == 0) {
