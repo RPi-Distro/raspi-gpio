@@ -301,7 +301,7 @@ void print_help()
   printf("are doing and at your own risk!\n");
   printf("\n");
   printf("The %s tool is designed to help hack / debug BCM283x GPIO.\n", name);
-  printf("Running %s with no arguments prints this help.\n", name);
+  printf("Running %s with the help argument prints this help.\n", name);
   printf("%s can get and print the state of a GPIO (or all GPIOs)\n", name);
   printf("and can be used to set the function, pulls and value of a GPIO.\n");
   printf("%s must be run as root.\n", name);
