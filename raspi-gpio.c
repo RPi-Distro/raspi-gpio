@@ -75,7 +75,7 @@ char *gpio_alt_names[54*6] =
 
 char *gpio_fsel_alts[8] =
 {
-  "", "", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
+  " ", " ", "5", "4", "0", "1", "2", "3"
 };
 
 /* 0 = none, 1 = down, 2 = up */
@@ -325,22 +325,6 @@ void print_help()
   printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and drving high\n", name);
 }
 
-/*int gpio_fsel_to_alt(int f)
-{
-  switch(f)
-  {
-    case  0: return -1;
-    case  1: return -1;
-    case  2: return  5;
-    case  3: return  4;
-    case  4: return  0;
-    case  5: return  1;
-    case  6: return  2;
-    default: break;
-  }
-  return  3;
-}*/
-
 /*
  * type:
  *   0 = no pull
@@ -402,7 +386,7 @@ int main (int argc, char *argv[])
 
   if(argc < 2)
   {
-    print_help();
+    printf("No arguments given - try \"raspi-gpio help\"\n");
     return 0;
   }
 
@@ -412,13 +396,18 @@ int main (int argc, char *argv[])
     return 0;
   }
 
+  if(strcmp(argv[1], "help") == 0)
+  {
+    print_help();
+    return 0;
+  }
+
   /* argc 2 or greater, next arg must be set, get or help */
   get = strcmp(argv[1], "get") == 0;
   set = strcmp(argv[1], "set") == 0;
   if(!set && !get)
   {
-    printf("Unknown argument \"%s\"\n", argv[1]);
-    print_help();
+    printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
     return 1;
   }
 
@@ -551,10 +540,7 @@ int main (int argc, char *argv[])
         fsel = get_gpio_fsel(n);
         gpio_fsel_to_namestr(n, fsel, name);
         level = get_gpio_level(n);
-        if(fsel < 2)
-          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, "    ", name);
-        else
-          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
+        printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
       }
     } else {
       /* print for single pin */
