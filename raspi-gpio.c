@@ -132,11 +132,16 @@ void print_gpio_alts_info(int gpio)
   printf("\n");
 }
 
-void print_gpio_alts_table()
+void print_gpio_alts_table(int gpio)
 {
-  int gpio;
+  int n;
   printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
-  for(gpio = 0; gpio < 54; gpio++)
+  if(gpio < 0) {
+    for(n = 0; n < 54; n++)
+    {
+      print_gpio_alts_info(n);
+    }
+  } else 
   {
     print_gpio_alts_info(gpio);
   }
@@ -307,7 +312,8 @@ void print_help()
   printf("OR\n");
   printf("  %s funcs [GPIO]\n", name);
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
-  printf("%s funcs will dump all the possible GPIO alt funcions in CSV format.\n", name);
+  printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
+  printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
   printf("Valid [options] for %s set are:\n", name);
   printf("  ip      set GPIO as input\n");
   printf("  op      set GPIO as output\n");
@@ -491,6 +497,7 @@ int main (int argc, char *argv[])
   printf("argc = %d\n", argc);
   printf("set = %d\n", set);
   printf("get = %d\n", get);
+  printf("funcs = %d\n", funcs);
   printf("pullup = %d\n", pullup);
   printf("pulldown = %d\n", pulldn);
   printf("pullnone = %d\n", pullnone);
@@ -503,10 +510,7 @@ int main (int argc, char *argv[])
   /* end arg parsing */
 
   if(funcs) {
-    if (pinnum == -1)
-      print_gpio_alts_table();
-    else
-      print_gpio_alts_info(pinnum);
+    print_gpio_alts_table(pinnum);
     return 0;
   }
 
