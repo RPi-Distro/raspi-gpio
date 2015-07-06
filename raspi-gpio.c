@@ -75,7 +75,7 @@ char *gpio_alt_names[54*6] =
 
 char *gpio_fsel_alts[8] =
 {
-  "", "", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
+  " ", " ", "5", "4", "0", "1", "2", "3"
 };
 
 /* 0 = none, 1 = down, 2 = up */
@@ -115,25 +115,35 @@ int gpio_default_pullstate[54] =
 /* Pointer to HW */
 static volatile uint32_t *gpio_base ;
 
-void print_gpio_alts_table()
+void print_gpio_alts_info(int gpio)
 {
-  int gpio;
   int alt;
-  printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
-  for(gpio = 0; gpio < 54; gpio++)
+  printf("%d", gpio);
+  if(gpio_default_pullstate[gpio] == 0)
+    printf(", NONE");
+  else if(gpio_default_pullstate[gpio] == 1)
+    printf(", DOWN");
+  else
+    printf(", UP");
+  for(alt=0; alt < 6; alt++)
   {
-    printf("%d", gpio);
-    if(gpio_default_pullstate[gpio] == 0)
-      printf(", NONE");
-    else if(gpio_default_pullstate[gpio] == 1)
-      printf(", DOWN");
-    else
-      printf(", UP");
-    for(alt=0; alt < 6; alt++)
+    printf(", %s", gpio_alt_names[gpio*6+alt]);
+  }
+  printf("\n");
+}
+
+void print_gpio_alts_table(int gpio)
+{
+  int n;
+  printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
+  if(gpio < 0) {
+    for(n = 0; n < 54; n++)
     {
-      printf(", %s", gpio_alt_names[gpio*6+alt]);
+      print_gpio_alts_info(n);
     }
-    printf("\n");
+  } else 
+  {
+    print_gpio_alts_info(gpio);
   }
 }
 
@@ -291,7 +301,7 @@ void print_help()
   printf("are doing and at your own risk!\n");
   printf("\n");
   printf("The %s tool is designed to help hack / debug BCM283x GPIO.\n", name);
-  printf("Running %s with no arguments prints this help.\n", name);
+  printf("Running %s with the help argument prints this help.\n", name);
   printf("%s can get and print the state of a GPIO (or all GPIOs)\n", name);
   printf("and can be used to set the function, pulls and value of a GPIO.\n");
   printf("%s must be run as root.\n", name);
@@ -300,9 +310,10 @@ void print_help()
   printf("OR\n");
   printf("  %s set <GPIO> [options]\n", name);
   printf("OR\n");
-  printf("  %s funcs\n", name);
+  printf("  %s funcs [GPIO]\n", name);
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
-  printf("%s funcs will dump all the possible GPIO alt funcions in CSV format.\n", name);
+  printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
+  printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
   printf("Valid [options] for %s set are:\n", name);
   printf("  ip      set GPIO as input\n");
   printf("  op      set GPIO as output\n");
@@ -324,22 +335,6 @@ void print_help()
   printf("  %s set 35 a0 pu     Set GPIO35 to ALT0 function (SPI_CE1_N) with pull up\n", name);
   printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and drving high\n", name);
 }
-
-/*int gpio_fsel_to_alt(int f)
-{
-  switch(f)
-  {
-    case  0: return -1;
-    case  1: return -1;
-    case  2: return  5;
-    case  3: return  4;
-    case  4: return  0;
-    case  5: return  1;
-    case  6: return  2;
-    default: break;
-  }
-  return  3;
-}*/
 
 /*
  * type:
@@ -392,6 +387,7 @@ int main (int argc, char *argv[])
 
   int set = 0;
   int get = 0;
+  int funcs = 0;
   int pullup = 0;
   int pulldn = 0;
   int pullnone = 0;
@@ -402,27 +398,27 @@ int main (int argc, char *argv[])
 
   if(argc < 2)
   {
-    print_help();
+    printf("No arguments given - try \"raspi-gpio help\"\n");
     return 0;
   }
 
-  if(argc==2 && (strcmp(argv[1], "funcs") == 0))
+  if(strcmp(argv[1], "help") == 0)
   {
-    print_gpio_alts_table();
+    print_help();
     return 0;
   }
 
   /* argc 2 or greater, next arg must be set, get or help */
   get = strcmp(argv[1], "get") == 0;
   set = strcmp(argv[1], "set") == 0;
-  if(!set && !get)
+  funcs = strcmp(argv[1], "funcs") == 0;
+  if(!set && !get && !funcs)
   {
-    printf("Unknown argument \"%s\"\n", argv[1]);
-    print_help();
+    printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
     return 1;
   }
 
-  if(get && (argc > 3))
+  if((get || funcs) && (argc > 3))
   {
     printf("Too many arguments\n");
     return 1;
@@ -442,6 +438,12 @@ int main (int argc, char *argv[])
       printf("Unknown GPIO \"%s\"\n", argv[2]);
       return 1;
     }
+  }
+
+  if(set && argc < 4)
+  {
+      printf("Nothing to set\n");
+      return 0;
   }
 
   /* parse remainng args */
@@ -495,6 +497,7 @@ int main (int argc, char *argv[])
   printf("argc = %d\n", argc);
   printf("set = %d\n", set);
   printf("get = %d\n", get);
+  printf("funcs = %d\n", funcs);
   printf("pullup = %d\n", pullup);
   printf("pulldown = %d\n", pulldn);
   printf("pullnone = %d\n", pullnone);
@@ -505,6 +508,11 @@ int main (int argc, char *argv[])
 #endif
 
   /* end arg parsing */
+
+  if(funcs) {
+    print_gpio_alts_table(pinnum);
+    return 0;
+  }
 
   if (geteuid())
   {
@@ -545,10 +553,7 @@ int main (int argc, char *argv[])
         fsel = get_gpio_fsel(n);
         gpio_fsel_to_namestr(n, fsel, name);
         level = get_gpio_level(n);
-        if(fsel < 2)
-          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, "    ", name);
-        else
-          printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
+        printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
       }
     } else {
       /* print for single pin */
