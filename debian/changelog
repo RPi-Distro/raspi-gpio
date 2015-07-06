@@ -1,3 +1,9 @@
+raspi-gpio (0.20150706) jessie; urgency=low
+
+  * 20150706 release
+
+ -- Serge Schneider <serge@raspberrypi.org>  Mon, 06 Jul 2015 09:31:27 +0100
+
 raspi-gpio (0.20150527) jessie; urgency=low
 
   * Change source format to native
