@@ -255,7 +255,7 @@ int set_gpio_value(int gpio, int value)
       *(gpio_base+GPSET0) = 0x1<<gpio;
     }
     else {
-      value -= 32;
+      gpio -= 32;
       *(gpio_base+GPSET1) = 0x1<<gpio;
     }
   } else
@@ -264,7 +264,7 @@ int set_gpio_value(int gpio, int value)
       *(gpio_base+GPCLR0) = 0x1<<gpio;
     }
     else {
-      value -= 32;
+      gpio -= 32;
       *(gpio_base+GPCLR1) = 0x1<<gpio;
     }
   }
