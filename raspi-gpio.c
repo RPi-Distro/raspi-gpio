@@ -515,7 +515,7 @@ int main (int argc, char *argv[])
   }
 
   /* Check for /dev/gpiomem, else we need root access for /dev/mem */
-  if ((fd = open ("/dev/bcm2835-gpiomem", O_RDWR | O_SYNC | O_CLOEXEC) ) >= 0)
+  if ((fd = open ("/dev/gpiomem", O_RDWR | O_SYNC | O_CLOEXEC) ) >= 0)
   {
     gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0) ;
   }
