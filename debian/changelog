@@ -1,3 +1,9 @@
+raspi-gpio (0.20150914) jessie; urgency=low
+
+  * 20150914 release
+
+ -- Serge Schneider <serge@raspberrypi.org>  Fri, 18 Sep 2015 11:21:52 +0100
+
 raspi-gpio (0.20150813) jessie; urgency=low
 
   * 20150813 release
