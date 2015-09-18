@@ -514,34 +514,43 @@ int main (int argc, char *argv[])
     return 0;
   }
 
-  if (geteuid())
+  /* Check for /dev/gpiomem, else we need root access for /dev/mem */
+  if ((fd = open ("/dev/gpiomem", O_RDWR | O_SYNC | O_CLOEXEC) ) >= 0)
   {
-    printf("Must be root\n");
-    return 0;
+    gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0) ;
   }
-
-  /* 2708 or 2709? */
-  cpu_type = get_cpu_type();
-
-  if(cpu_type > 1 || cpu_type < 0)
-    return 1;
-
-  if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
-  {
-    printf("Unable to open /dev/mem: %s\n", strerror (errno)) ;
-    return 1;
-  }
-
-  if(cpu_type==0)
-    gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2708_PERI_BASE) ;
   else
-    gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2709_PERI_BASE) ;
+  {
+    if (geteuid())
+    {
+      printf("Must be root\n");
+      return 0;
+    }
+
+    /* 2708 or 2709? */
+    cpu_type = get_cpu_type();
+
+    if(cpu_type > 1 || cpu_type < 0)
+      return 1;
+
+    if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
+    {
+      printf("Unable to open /dev/mem: %s\n", strerror (errno)) ;
+      return 1;
+    }
+
+    if(cpu_type==0)
+      gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2708_PERI_BASE) ;
+    else
+      gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2709_PERI_BASE) ;
+  }
 
   if ((int32_t)gpio_base == -1)
   {
     printf("mmap (GPIO) failed: %s\n", strerror (errno)) ;
     return 1;
   }
+
 
   if(get) {
     if(pinnum < 0) {
