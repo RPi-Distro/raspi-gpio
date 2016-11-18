@@ -291,6 +291,23 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
   return sprintf(name, "%s", gpio_alt_names[gpio*6 + altfn]);
 }
 
+void print_raw_gpio_regs(void)
+{
+  int i;
+
+  for (i = 0; i <= GPPUDCLK1; i++)
+  {
+    uint32_t val = *(gpio_base + i);
+    if ((i & 3) == 0)
+      printf("%02x:", i * 4);
+    printf(" %08x", val);
+    if ((i & 3) == 3)
+      printf("\n");
+  }
+  if (i & 3)
+    printf("\n");
+}
+
 void print_help()
 {
   char *name = "raspi-gpio"; /* in case we want to rename */
@@ -311,6 +328,8 @@ void print_help()
   printf("  %s set <GPIO> [options]\n", name);
   printf("OR\n");
   printf("  %s funcs [GPIO]\n", name);
+  printf("OR\n");
+  printf("  %s raw\n", name);
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
   printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
   printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
@@ -333,7 +352,7 @@ void print_help()
   printf("  %s set 20 dl        Set GPIO20 to output low/zero (must already be set as an output)\n", name);
   printf("  %s set 20 ip pd     Set GPIO20 to input with pull down\n", name);
   printf("  %s set 35 a0 pu     Set GPIO35 to ALT0 function (SPI_CE1_N) with pull up\n", name);
-  printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and drving high\n", name);
+  printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and driving high\n", name);
 }
 
 /*
@@ -388,6 +407,7 @@ int main (int argc, char *argv[])
   int set = 0;
   int get = 0;
   int funcs = 0;
+  int raw = 0;
   int pullup = 0;
   int pulldn = 0;
   int pullnone = 0;
@@ -412,7 +432,8 @@ int main (int argc, char *argv[])
   get = strcmp(argv[1], "get") == 0;
   set = strcmp(argv[1], "set") == 0;
   funcs = strcmp(argv[1], "funcs") == 0;
-  if(!set && !get && !funcs)
+  raw = strcmp(argv[1], "raw") == 0;
+  if(!set && !get && !funcs && !raw)
   {
     printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
     return 1;
@@ -446,7 +467,7 @@ int main (int argc, char *argv[])
       return 0;
   }
 
-  /* parse remainng args */
+  /* parse remaining args */
   for(n = 3; n < argc; n++) {
     if(strcmp(argv[n], "dh") == 0) {
       drivehigh = 1;
@@ -607,6 +628,11 @@ int main (int argc, char *argv[])
       gpio_set_pull(pinnum, 2);
     }
 
+  }
+
+  if(raw) {
+    print_raw_gpio_regs();
+    return 0;
   }
 
   return 0;
