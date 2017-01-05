@@ -91,9 +91,6 @@ int gpio_default_pullstate[54] =
   2,2,2,2,2,2,2,2 /*GPIO46-53 UP*/
 };
 
-#define BCM2708_PERI_BASE 0x20000000
-#define BCM2709_PERI_BASE 0x3F000000
-
 #define GPIO_BASE_OFFSET  0x00200000
 
 #define BLOCK_SIZE  (4*1024)
@@ -168,41 +165,49 @@ void delay_us(uint32_t delay)
   }
 }
 
-int get_cpu_type(void)
+uint32_t get_hwbase(void)
 {
+  const char *ranges_file = "/proc/device-tree/soc/ranges";
+  uint8_t ranges[8];
   FILE *fd;
-  char line[256];
-  int found = 0;
+  uint32_t ret = 0;
 
-  if ((fd = fopen("/proc/cpuinfo", "r")) == NULL)
+  if ((fd = fopen(ranges_file, "rb")) == NULL)
   {
-    printf ("Can't open /proc/cpuinfo\n") ;
-    return -1;
+    printf ("Can't open '%s'\n", ranges_file);
   }
-
-  while (fgets(line, 120, fd) != NULL)
+  else
   {
-    if (strncmp (line, "Hardware", 8) == 0)
+    ret = fread(ranges, 1, sizeof(ranges), fd);
+
+    if (ret  == sizeof(ranges))
     {
-      found = 1;
-      break;
+      ret = (ranges[4] << 24) |
+            (ranges[5] << 16) |
+            (ranges[6] << 8) |
+            (ranges[7] << 0);
+      if ((ranges[0] != 0x7e) ||
+          (ranges[1] != 0x00) ||
+          (ranges[2] != 0x00) ||
+          (ranges[3] != 0x00) ||
+	  ((ret != 0x20000000) && (ret != 0x3f000000)))
+      {
+        printf("Unexpected ranges data (%02x%02x%02x%02x %02x%02x%02x%02x)\n",
+	       ranges[0], ranges[1], ranges[2], ranges[3],
+	       ranges[4], ranges[5], ranges[6], ranges[7]);
+        ret = 0;
+      }
+    }
+    else
+    {
+       printf("Can't read '%s'\n", ranges_file);
+       ret = 0;
     }
   }
 
-  if (!found) {
-    printf("Can't find hardware type!\n");
-    return -1;
-  }
+  fclose(fd);
 
-  if (strstr(line, "BCM2709") != NULL)
-    return PROC_TYPE_BCM2709;
-  else if (strstr(line, "BCM2708") != NULL)
-    return PROC_TYPE_BCM2708;
-  else
-  {
-    printf("Unknown hardware type %s\n", line);
-    return -1;
-  }
+  return ret;
 }
 
 int get_gpio_fsel(int gpio)
@@ -291,6 +296,23 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
   return sprintf(name, "%s", gpio_alt_names[gpio*6 + altfn]);
 }
 
+void print_raw_gpio_regs(void)
+{
+  int i;
+
+  for (i = 0; i <= GPPUDCLK1; i++)
+  {
+    uint32_t val = *(gpio_base + i);
+    if ((i & 3) == 0)
+      printf("%02x:", i * 4);
+    printf(" %08x", val);
+    if ((i & 3) == 3)
+      printf("\n");
+  }
+  if (i & 3)
+    printf("\n");
+}
+
 void print_help()
 {
   char *name = "raspi-gpio"; /* in case we want to rename */
@@ -311,6 +333,8 @@ void print_help()
   printf("  %s set <GPIO> [options]\n", name);
   printf("OR\n");
   printf("  %s funcs [GPIO]\n", name);
+  printf("OR\n");
+  printf("  %s raw\n", name);
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
   printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
   printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
@@ -333,7 +357,7 @@ void print_help()
   printf("  %s set 20 dl        Set GPIO20 to output low/zero (must already be set as an output)\n", name);
   printf("  %s set 20 ip pd     Set GPIO20 to input with pull down\n", name);
   printf("  %s set 35 a0 pu     Set GPIO35 to ALT0 function (SPI_CE1_N) with pull up\n", name);
-  printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and drving high\n", name);
+  printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and driving high\n", name);
 }
 
 /*
@@ -371,13 +395,11 @@ int gpio_set_pull(int gpio, int type)
 
 int main (int argc, char *argv[])
 {
-
+  uint32_t hwbase;
   int fd;
   int n;
 
   int ret;
-
-  int cpu_type;
 
   int fsel;
   char name[512];
@@ -388,6 +410,7 @@ int main (int argc, char *argv[])
   int set = 0;
   int get = 0;
   int funcs = 0;
+  int raw = 0;
   int pullup = 0;
   int pulldn = 0;
   int pullnone = 0;
@@ -412,7 +435,8 @@ int main (int argc, char *argv[])
   get = strcmp(argv[1], "get") == 0;
   set = strcmp(argv[1], "set") == 0;
   funcs = strcmp(argv[1], "funcs") == 0;
-  if(!set && !get && !funcs)
+  raw = strcmp(argv[1], "raw") == 0;
+  if(!set && !get && !funcs && !raw)
   {
     printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
     return 1;
@@ -446,7 +470,7 @@ int main (int argc, char *argv[])
       return 0;
   }
 
-  /* parse remainng args */
+  /* parse remaining args */
   for(n = 3; n < argc; n++) {
     if(strcmp(argv[n], "dh") == 0) {
       drivehigh = 1;
@@ -527,10 +551,9 @@ int main (int argc, char *argv[])
       return 0;
     }
 
-    /* 2708 or 2709? */
-    cpu_type = get_cpu_type();
+    hwbase = get_hwbase();
 
-    if(cpu_type > 1 || cpu_type < 0)
+    if(!hwbase)
       return 1;
 
     if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
@@ -539,10 +562,7 @@ int main (int argc, char *argv[])
       return 1;
     }
 
-    if(cpu_type==0)
-      gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2708_PERI_BASE) ;
-    else
-      gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+BCM2709_PERI_BASE) ;
+    gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+hwbase);
   }
 
   if ((int32_t)gpio_base == -1)
@@ -550,7 +570,6 @@ int main (int argc, char *argv[])
     printf("mmap (GPIO) failed: %s\n", strerror (errno)) ;
     return 1;
   }
-
 
   if(get) {
     if(pinnum < 0) {
@@ -607,6 +626,11 @@ int main (int argc, char *argv[])
       gpio_set_pull(pinnum, 2);
     }
 
+  }
+
+  if(raw) {
+    print_raw_gpio_regs();
+    return 0;
   }
 
   return 0;
