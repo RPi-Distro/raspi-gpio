@@ -1,3 +1,18 @@
+raspi-gpio (0.20170105) jessie; urgency=medium
+
+  [ Phil Elwell ]
+  * Get fallback HW base address from Device Tree
+
+    - On new kernels the Hardware entry in /proc/cpuinfo says BCM2835 on
+      all Pis, so it can't be used to find the correct base address for
+      the hardware peripherals (0x200000000 or 0x3f000000). Instead,
+      read the /soc/ranges property from /proc/device-tree - the second
+      word holds the required value.
+
+      N.B. This code path is only used if /dev/gpiomem doesn't exist.
+
+ -- Serge Schneider <serge@raspberrypi.org>  Thu, 05 Jan 2017 17:27:31 +0000
+
 raspi-gpio (0.20150914) jessie; urgency=low
 
   * 20150914 release
