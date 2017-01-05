@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
 
-AC_INIT([raspi-gpio], [0.1], [serge@raspberrypi.org])
+AC_INIT([raspi-gpio], [0.2], [serge@raspberrypi.org])
 
 AM_INIT_AUTOMAKE([1.9 foreign])
 
