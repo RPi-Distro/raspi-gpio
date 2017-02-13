@@ -14,6 +14,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <time.h>
 
 char *gpio_alt_names[54*6] =
 {
