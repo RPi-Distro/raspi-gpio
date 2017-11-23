@@ -16,6 +16,28 @@
 #include <sys/mman.h>
 #include <time.h>
 
+#define DRIVE_UNSET -1
+#define DRIVE_LOW    0
+#define DRIVE_HIGH   1
+
+#define PULL_UNSET  -1
+#define PULL_NONE    0
+#define PULL_DOWN    1
+#define PULL_UP      2
+
+#define FUNC_UNSET  -1
+#define FUNC_IP      0
+#define FUNC_OP      1
+#define FUNC_A0      4
+#define FUNC_A1      5
+#define FUNC_A2      6
+#define FUNC_A3      7
+#define FUNC_A4      3
+#define FUNC_A5      2
+
+#define GPIO_MIN     0
+#define GPIO_MAX     53
+
 char *gpio_alt_names[54*6] =
 {
 "SDA0"      , "SA5"        , "PCLK"      , "AVEOUT_VCLK"   , "AVEIN_VCLK" , "-"         ,
@@ -217,7 +239,7 @@ int get_gpio_fsel(int gpio)
      3 bits per sel (so bits 0:29 used) */
   uint32_t reg = gpio / 10;
   uint32_t sel = gpio % 10;
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   /*printf("reg = %d, sel = %d ", reg, sel);*/
   return (int)((*(gpio_base+reg))>>(3*sel))&0x7;
 }
@@ -228,7 +250,7 @@ int set_gpio_fsel(int gpio, int fsel)
   uint32_t reg = gpio / 10;
   uint32_t sel = gpio % 10;
   uint32_t mask;
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   tmp = gpio_base+reg;
   mask = 0x7<<(3*sel);
   mask = ~mask;
@@ -241,7 +263,7 @@ int set_gpio_fsel(int gpio, int fsel)
 
 int get_gpio_level(int gpio)
 {
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   if(gpio < 32)
   {
     return ((*(gpio_base+GPLEV0))>>gpio)&0x1;
@@ -254,7 +276,7 @@ int get_gpio_level(int gpio)
 
 int set_gpio_value(int gpio, int value)
 {
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   if(value != 0)
   {
     if(gpio < 32) {
@@ -280,7 +302,7 @@ int set_gpio_value(int gpio, int value)
 int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
 {
   int altfn = 0;
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   switch (fsel)
   {
     case 0: return sprintf(name, "INPUT");
@@ -336,6 +358,9 @@ void print_help()
   printf("  %s funcs [GPIO]\n", name);
   printf("OR\n");
   printf("  %s raw\n", name);
+  printf("\n");
+  printf("GPIO is a comma-separated list of pin numbers or ranges (without spaces),\n");
+  printf("e.g. 4 or 18-21 or 7,9-11\n");
   printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
   printf("%s funcs will dump all the possible GPIO alt funcions in CSV format\n", name);
   printf("or if [GPIO] is specified the alternate funcs just for that specific GPIO.\n");
@@ -351,6 +376,7 @@ void print_help()
   printf("Examples:\n");
   printf("  %s get              Prints state of all GPIOs one per line\n", name);
   printf("  %s get 20           Prints state of GPIO20\n", name);
+  printf("  %s get 20,21        Prints state of GPIO20 and GPIO21\n", name);
   printf("  %s set 20 a5        Set GPIO20 to ALT5 function (GPCLK0)\n", name);
   printf("  %s set 20 pu        Enable GPIO20 ~50k in-pad pull up\n", name);
   printf("  %s set 20 pd        Enable GPIO20 ~50k in-pad pull down\n", name);
@@ -369,7 +395,7 @@ void print_help()
  */
 int gpio_set_pull(int gpio, int type)
 {
-  if(gpio < 0 || gpio > 53) return -1;
+  if(gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
   if(type < 0 || type > 2) return -1;
 
   if(gpio < 32) {
@@ -392,19 +418,57 @@ int gpio_set_pull(int gpio, int type)
     *(gpio_base+GPPUDCLK1) = 0;
     delay_us(10);
   }
+
+  return 0;
 }
 
-int main (int argc, char *argv[])
+
+int gpio_get(int pinnum)
+{
+  char name[512];
+  int level;
+  int fsel;
+  int n;
+
+  fsel = get_gpio_fsel(pinnum);
+  gpio_fsel_to_namestr(pinnum, fsel, name);
+  level = get_gpio_level(pinnum);
+  if(fsel < 2)
+    printf("GPIO %d: level=%d fsel=%d func=%s\n", pinnum, level, fsel, name);
+  else
+    printf("GPIO %d: level=%d fsel=%d alt=%s func=%s\n", pinnum, level, fsel, gpio_fsel_alts[fsel], name);
+  return 0;
+}
+
+int gpio_set(int pinnum, int fsparam, int drive, int pull)
+{
+  /* set function */
+  if(fsparam != FUNC_UNSET)
+    set_gpio_fsel(pinnum, fsparam);
+
+  /* set output value (check pin is output first) */
+  if(drive != DRIVE_UNSET) {
+    if(get_gpio_fsel(pinnum) == 1) {
+      set_gpio_value(pinnum, drive);
+    } else {
+      printf("Can't set pin value, not an output\n");
+      return 1;
+    }
+  }
+
+  /* set pulls */
+  if(pull != PULL_UNSET)
+    return gpio_set_pull(pinnum, pull);
+
+  return 0;
+}
+
+int main(int argc, char *argv[])
 {
   uint32_t hwbase;
   int fd;
-  int n;
-
   int ret;
-
-  int fsel;
-  char name[512];
-  int level;
+  int n;
 
   /* arg parsing */
 
@@ -412,13 +476,10 @@ int main (int argc, char *argv[])
   int get = 0;
   int funcs = 0;
   int raw = 0;
-  int pullup = 0;
-  int pulldn = 0;
-  int pullnone = 0;
-  int fsparam = -1;
-  int pinnum = -1;
-  int drivehigh = 0;
-  int drivelow = 0;
+  int pull = PULL_UNSET;
+  int fsparam = FUNC_UNSET;
+  int drive = DRIVE_UNSET;
+  uint32_t gpiomask[2] = { 0, 0 }; /* Enough for 0-53 */
 
   if(argc < 2)
   {
@@ -455,12 +516,46 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  if(argc > 2) /* expect pin number next */
+  if(argc > 2) /* expect pin number(s) next */
   {
-    ret = sscanf(argv[2], "%d", &pinnum);
-    if(ret != 1 || pinnum < 0 || pinnum > 53)
-    {
-      printf("Unknown GPIO \"%s\"\n", argv[2]);
+    char *p = argv[2];
+    while (p) {
+      int pin, pin2, len;
+      ret = sscanf(p, "%d%n", &pin, &len);
+      if(ret != 1 || pin < GPIO_MIN || pin > GPIO_MAX)
+	break;
+      p += len;
+
+      if (*p == '-') {
+	p++;
+	ret = sscanf(p, "%d%n", &pin2, &len);
+	if(ret != 1 || pin2 < GPIO_MIN || pin2 > GPIO_MAX)
+	  break;
+	if (pin2 < pin)
+	{
+	  int tmp = pin2;
+	  pin2 = pin;
+	  pin = tmp;
+	}
+	p += len;
+      } else {
+	pin2 = pin;
+      }
+      while (pin <= pin2)
+      {
+	gpiomask[pin/32] |= (1 << (pin % 32));
+	pin++;
+      }
+      if (*p == '\0') {
+	p = NULL;
+      } else {
+	if (*p != ',')
+	  break;
+	p++;
+      }
+    }
+    if (p) {
+      printf("Unknown GPIO \"%s\"\n", p);
       return 1;
     }
   }
@@ -473,69 +568,46 @@ int main (int argc, char *argv[])
 
   /* parse remaining args */
   for(n = 3; n < argc; n++) {
-    if(strcmp(argv[n], "dh") == 0) {
-      drivehigh = 1;
-    } else
-    if(strcmp(argv[n], "dl") == 0) {
-      drivelow = 1;
-    } else
-    if(strcmp(argv[n], "ip") == 0) {
-      fsparam = 0;
-    } else
-    if(strcmp(argv[n], "op") == 0) {
-      fsparam = 1;
-    } else
-    if(strcmp(argv[n], "a0") == 0) {
-      fsparam = 4;
-    } else
-    if(strcmp(argv[n], "a1") == 0) {
-      fsparam = 5;
-    } else
-    if(strcmp(argv[n], "a2") == 0) {
-      fsparam = 6;
-    } else
-    if(strcmp(argv[n], "a3") == 0) {
-      fsparam = 7;
-    } else
-    if(strcmp(argv[n], "a4") == 0) {
-      fsparam = 3;
-    } else
-    if(strcmp(argv[n], "a5") == 0) {
-      fsparam = 2;
-    } else
-    if(strcmp(argv[n], "pu") == 0) {
-      pullup = 1;
-    } else
-    if(strcmp(argv[n], "pd") == 0) {
-      pulldn = 1;
-    } else
-    if(strcmp(argv[n], "pn") == 0) {
-      pullnone = 1;
-    } else
-    {
+    if(strcmp(argv[n], "dh") == 0)
+      drive = DRIVE_HIGH;
+    else if(strcmp(argv[n], "dl") == 0)
+      drive = DRIVE_LOW;
+    else if(strcmp(argv[n], "ip") == 0)
+      fsparam = FUNC_IP;
+    else if(strcmp(argv[n], "op") == 0)
+      fsparam = FUNC_OP;
+    else if(strcmp(argv[n], "a0") == 0)
+      fsparam = FUNC_A0;
+    else if(strcmp(argv[n], "a1") == 0)
+      fsparam = FUNC_A1;
+    else if(strcmp(argv[n], "a2") == 0)
+      fsparam = FUNC_A2;
+    else if(strcmp(argv[n], "a3") == 0)
+      fsparam = FUNC_A3;
+    else if(strcmp(argv[n], "a4") == 0)
+      fsparam = FUNC_A4;
+    else if(strcmp(argv[n], "a5") == 0)
+      fsparam = FUNC_A5;
+    else if(strcmp(argv[n], "pu") == 0)
+      pull = PULL_UP;
+    else if(strcmp(argv[n], "pd") == 0)
+      pull = PULL_DOWN;
+    else if(strcmp(argv[n], "pn") == 0)
+      pull = PULL_NONE;
+    else {
       printf("Unknown argument \"%s\"\n", argv[n]);
       return 1;
     }
   }
 
-#if 0
-  printf("argc = %d\n", argc);
-  printf("set = %d\n", set);
-  printf("get = %d\n", get);
-  printf("funcs = %d\n", funcs);
-  printf("pullup = %d\n", pullup);
-  printf("pulldown = %d\n", pulldn);
-  printf("pullnone = %d\n", pullnone);
-  printf("fsparam = %d\n", fsparam);
-  printf("pinnum = %d\n", pinnum);
-  printf("drivehigh = %d\n", drivehigh);
-  printf("drivelow = %d\n", drivelow);
-#endif
-
   /* end arg parsing */
 
   if(funcs) {
-    print_gpio_alts_table(pinnum);
+    int pin;
+    for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++) {
+      if (gpiomask[pin / 32] & (1 << (pin % 32)))
+	print_gpio_alts_table(pin);
+    }
     return 0;
   }
 
@@ -572,68 +644,29 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  if(get) {
-    if(pinnum < 0) {
-      for(n = 0; n < 54; n++)
-      {
-        if(n==0) printf("BANK0 (GPIO 0 to 27):\n");
-        if(n==28) printf("BANK1 (GPIO 28 to 45):\n");
-        if(n==46) printf("BANK2 (GPIO 46 to 53):\n");
-        fsel = get_gpio_fsel(n);
-        gpio_fsel_to_namestr(n, fsel, name);
-        level = get_gpio_level(n);
-        printf("  GPIO %02d: level=%d fsel=%d alt=%s func=%s\n", n, level, fsel, gpio_fsel_alts[fsel], name);
+  if (set || get) {
+    int all_pins = !(gpiomask[0] | gpiomask[1]);
+    int pin;
+    for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++) {
+      if (all_pins) {
+	if(pin==0) printf("BANK0 (GPIO 0 to 27):\n");
+	if(pin==28) printf("BANK1 (GPIO 28 to 45):\n");
+	if(pin==46) printf("BANK2 (GPIO 46 to 53):\n");
+      } else if (!(gpiomask[pin / 32] & (1 << (pin % 32)))) {
+	continue;
       }
-    } else {
-      /* print for single pin */
-      fsel = get_gpio_fsel(pinnum);
-      gpio_fsel_to_namestr(pinnum, fsel, name);
-      level = get_gpio_level(pinnum);
-      if(fsel < 2)
-        printf("GPIO %d: level=%d fsel=%d func=%s\n", pinnum, level, fsel, name);
-      else
-        printf("GPIO %d: level=%d fsel=%d alt=%s func=%s\n", pinnum, level, fsel, gpio_fsel_alts[fsel], name);
-    }
-  }
-
-  if(set) {
-
-    /* set function */
-    if(fsparam >= 0) {
-      set_gpio_fsel(pinnum, fsparam);
-    }
-
-    /* set output value (check pin is output first) */
-    if(drivehigh || drivelow) {
-      if(get_gpio_fsel(pinnum) == 1) {
-        if(drivehigh)
-          set_gpio_value(pinnum, 1);
-        else
-          set_gpio_value(pinnum, 0);
+      if (get) {
+	if (gpio_get(pin))
+	  return 1;
       } else {
-        printf("Can't set pin value, not an output\n");
-        return 1;
+	if (gpio_set(pin, fsparam, drive, pull))
+	  return 1;
       }
     }
-
-    /* set pulls */
-    if(pullnone) {
-      gpio_set_pull(pinnum, 0);
-    } else
-    if(pulldn) {
-      gpio_set_pull(pinnum, 1);
-    } else
-    if(pullup) {
-      gpio_set_pull(pinnum, 2);
-    }
-
   }
 
-  if(raw) {
+  if (raw)
     print_raw_gpio_regs();
-    return 0;
-  }
 
   return 0;
-
 }
