@@ -1,3 +1,14 @@
+raspi-gpio (0.20171123) stretch; urgency=medium
+
+  [ Phil Elwell ]
+  * Add support for multiple discrete GPIOs and ranges
+    - It is often necessary to examine a number of pins but not all of them,
+      so add the ability to use comma-separated lists of individual GPIOs
+      or ranges (x-y), e.g. "7,9-11", where before a single GPIO could be
+      used.
+
+ -- Serge Schneider <serge@raspberrypi.org>  Fri, 24 Nov 2017 06:40:08 +0000
+
 raspi-gpio (0.20170105) jessie; urgency=medium
 
   [ Phil Elwell ]
