@@ -152,21 +152,6 @@ void print_gpio_alts_info(int gpio)
   printf("\n");
 }
 
-void print_gpio_alts_table(int gpio)
-{
-  int n;
-  printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
-  if(gpio < 0) {
-    for(n = 0; n < 54; n++)
-    {
-      print_gpio_alts_info(n);
-    }
-  } else 
-  {
-    print_gpio_alts_info(gpio);
-  }
-}
-
 void delay_us(uint32_t delay)
 {
   struct timespec tv_req;
@@ -480,6 +465,7 @@ int main(int argc, char *argv[])
   int fsparam = FUNC_UNSET;
   int drive = DRIVE_UNSET;
   uint32_t gpiomask[2] = { 0, 0 }; /* Enough for 0-53 */
+  int all_pins = 0;
 
   if(argc < 2)
   {
@@ -602,11 +588,14 @@ int main(int argc, char *argv[])
 
   /* end arg parsing */
 
-  if(funcs) {
+  all_pins = !(gpiomask[0] | gpiomask[1]);
+
+  if (funcs) {
     int pin;
+    printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
     for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++) {
-      if (gpiomask[pin / 32] & (1 << (pin % 32)))
-	print_gpio_alts_table(pin);
+      if (all_pins || gpiomask[pin / 32] & (1 << (pin % 32)))
+        print_gpio_alts_info(pin);
     }
     return 0;
   }
@@ -645,7 +634,6 @@ int main(int argc, char *argv[])
   }
 
   if (set || get) {
-    int all_pins = !(gpiomask[0] | gpiomask[1]);
     int pin;
     for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++) {
       if (all_pins) {
