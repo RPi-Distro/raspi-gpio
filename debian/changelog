@@ -1,3 +1,10 @@
+raspi-gpio (0.20190304) stretch; urgency=medium
+
+  [ Phil Elwell ]
+  * raspi-gpio: Fix handling of "funcs" mode
+
+ -- Serge Schneider <serge@raspberrypi.org>  Wed, 03 Apr 2019 14:34:45 +0100
+
 raspi-gpio (0.20171123) stretch; urgency=medium
 
   [ Phil Elwell ]
