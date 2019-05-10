@@ -1,3 +1,11 @@
+raspi-gpio (0.20190620) buster; urgency=medium
+
+  [ Phil Elwell ]
+  * Reformat with astyle (cosmetic change)
+  * Add support for 2711
+
+ -- Serge Schneider <serge@raspberrypi.org>  Thu, 20 Jun 2019 17:19:33 +0100
+
 raspi-gpio (0.20190304) stretch; urgency=medium
 
   [ Phil Elwell ]
