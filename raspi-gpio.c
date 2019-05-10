@@ -38,7 +38,7 @@
 #define GPIO_MIN     0
 #define GPIO_MAX     53
 
-char *gpio_alt_names[54*6] =
+static const char *gpio_alt_names_2708[54*6] =
 {
     "SDA0"      , "SA5"        , "PCLK"      , "AVEOUT_VCLK"   , "AVEIN_VCLK" , "-"         ,
     "SCL0"      , "SA4"        , "DE"        , "AVEOUT_DSYNC"  , "AVEIN_DSYNC", "-"         ,
@@ -96,13 +96,76 @@ char *gpio_alt_names[54*6] =
     "SD0_DAT3"  , "PWM1"       , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"    , "-"
 };
 
-char *gpio_fsel_alts[8] =
+static const char *gpio_alt_names_2711[54*6] =
+{
+    "SDA0"            , "SA5"             , "PCLK"            , "SPI3_CE0_N"      , "TXD2"            , "SDA6"            ,
+    "SCL0"            , "SA4"             , "DE"              , "SPI3_MISO"       , "RXD2"            , "SCL6"            ,
+    "SDA1"            , "SA3"             , "LCD_VSYNC"       , "SPI3_MOSI"       , "CTS2"            , "SDA3"            ,
+    "SCL1"            , "SA2"             , "LCD_HSYNC"       , "SPI3_SCLK"       , "RTS2"            , "SCL3"            ,
+    "GPCLK0"          , "SA1"             , "DPI_D0"          , "SPI4_CE0_N"      , "TXD3"            , "SDA3"            ,
+    "GPCLK1"          , "SA0"             , "DPI_D1"          , "SPI4_MISO"       , "RXD3"            , "SCL3"            ,
+    "GPCLK2"          , "SOE_N_SE"        , "DPI_D2"          , "SPI4_MOSI"       , "CTS3"            , "SDA4"            ,
+    "SPI0_CE1_N"      , "SWE_N_SRW_N"     , "DPI_D3"          , "SPI4_SCLK"       , "RTS3"            , "SCL4"            ,
+    "SPI0_CE0_N"      , "SD0"             , "DPI_D4"          , "I2CSL_CE_N"      , "TXD4"            , "SDA4"            ,
+    "SPI0_MISO"       , "SD1"             , "DPI_D5"          , "I2CSL_SDI_MISO"  , "RXD4"            , "SCL4"            ,
+    "SPI0_MOSI"       , "SD2"             , "DPI_D6"          , "I2CSL_SDA_MOSI"  , "CTS4"            , "SDA5"            ,
+    "SPI0_SCLK"       , "SD3"             , "DPI_D7"          , "I2CSL_SCL_SCLK"  , "RTS4"            , "SCL5"            ,
+    "PWM0_0"          , "SD4"             , "DPI_D8"          , "SPI5_CE0_N"      , "TXD5"            , "SDA5"            ,
+    "PWM0_1"          , "SD5"             , "DPI_D9"          , "SPI5_MISO"       , "RXD5"            , "SCL5"            ,
+    "TXD0"            , "SD6"             , "DPI_D10"         , "SPI5_MOSI"       , "CTS5"            , "TXD1"            ,
+    "RXD0"            , "SD7"             , "DPI_D11"         , "SPI5_SCLK"       , "RTS5"            , "RXD1"            ,
+    "-"               , "SD8"             , "DPI_D12"         , "CTS0"            , "SPI1_CE2_N"      , "CTS1"            ,
+    "-"               , "SD9"             , "DPI_D13"         , "RTS0"            , "SPI1_CE1_N"      , "RTS1"            ,
+    "PCM_CLK"         , "SD10"            , "DPI_D14"         , "SPI6_CE0_N"      , "SPI1_CE0_N"      , "PWM0_0"          ,
+    "PCM_FS"          , "SD11"            , "DPI_D15"         , "SPI6_MISO"       , "SPI1_MISO"       , "PWM0_1"          ,
+    "PCM_DIN"         , "SD12"            , "DPI_D16"         , "SPI6_MOSI"       , "SPI1_MOSI"       , "GPCLK0"          ,
+    "PCM_DOUT"        , "SD13"            , "DPI_D17"         , "SPI6_SCLK"       , "SPI1_SCLK"       , "GPCLK1"          ,
+    "SD0_CLK"         , "SD14"            , "DPI_D18"         , "SD1_CLK"         , "ARM_TRST"        , "SDA6"            ,
+    "SD0_CMD"         , "SD15"            , "DPI_D19"         , "SD1_CMD"         , "ARM_RTCK"        , "SCL6"            ,
+    "SD0_DAT0"        , "SD16"            , "DPI_D20"         , "SD1_DAT0"        , "ARM_TDO"         , "SPI3_CE1_N"      ,
+    "SD0_DAT1"        , "SD17"            , "DPI_D21"         , "SD1_DAT1"        , "ARM_TCK"         , "SPI4_CE1_N"      ,
+    "SD0_DAT2"        , "-"               , "DPI_D22"         , "SD1_DAT2"        , "ARM_TDI"         , "SPI5_CE1_N"      ,
+    "SD0_DAT3"        , "-"               , "DPI_D23"         , "SD1_DAT3"        , "ARM_TMS"         , "SPI6_CE1_N"      ,
+    "SDA0"            , "SA5"             , "PCM_CLK"         , "-"               , "MII_A_RX_ERR"    , "RGMII_MDIO"      ,
+    "SCL0"            , "SA4"             , "PCM_FS"          , "-"               , "MII_A_TX_ERR"    , "RGMII_MDC"       ,
+    "-"               , "SA3"             , "PCM_DIN"         , "CTS0"            , "MII_A_CRS"       , "CTS1"            ,
+    "-"               , "SA2"             , "PCM_DOUT"        , "RTS0"            , "MII_A_COL"       , "RTS1"            ,
+    "GPCLK0"          , "SA1"             , "-"               , "TXD0"            , "SD_CARD_PRES"    , "TXD1"            ,
+    "-"               , "SA0"             , "-"               , "RXD0"            , "SD_CARD_WRPROT"  , "RXD1"            ,
+    "GPCLK0"          , "SOE_N_SE"        , "-"               , "SD1_CLK"         , "SD_CARD_LED"     , "RGMII_IRQ"       ,
+    "SPI0_CE1_N"      , "SWE_N_SRW_N"     , "-"               , "SD1_CMD"         , "RGMII_START_STOP", "-"               ,
+    "SPI0_CE0_N"      , "SD0"             , "TXD0"            , "SD1_DAT0"        , "RGMII_RX_OK"     , "MII_A_RX_ERR"    ,
+    "SPI0_MISO"       , "SD1"             , "RXD0"            , "SD1_DAT1"        , "RGMII_MDIO"      , "MII_A_TX_ERR"    ,
+    "SPI0_MOSI"       , "SD2"             , "RTS0"            , "SD1_DAT2"        , "RGMII_MDC"       , "MII_A_CRS"       ,
+    "SPI0_SCLK"       , "SD3"             , "CTS0"            , "SD1_DAT3"        , "RGMII_IRQ"       , "MII_A_COL"       ,
+    "PWM1_0"          , "SD4"             , "-"               , "SD1_DAT4"        , "SPI0_MISO"       , "TXD1"            ,
+    "PWM1_1"          , "SD5"             , "-"               , "SD1_DAT5"        , "SPI0_MOSI"       , "RXD1"            ,
+    "GPCLK1"          , "SD6"             , "-"               , "SD1_DAT6"        , "SPI0_SCLK"       , "RTS1"            ,
+    "GPCLK2"          , "SD7"             , "-"               , "SD1_DAT7"        , "SPI0_CE0_N"      , "CTS1"            ,
+    "GPCLK1"          , "SDA0"            , "SDA1"            , "-"               , "SPI0_CE1_N"      , "SD_CARD_VOLT"    ,
+    "PWM0_1"          , "SCL0"            , "SCL1"            , "-"               , "SPI0_CE2_N"      , "SD_CARD_PWR0"    ,
+    "SDA0"            , "SDA1"            , "SPI0_CE0_N"      , "-"               , "-"               , "SPI2_CE1_N"      ,
+    "SCL0"            , "SCL1"            , "SPI0_MISO"       , "-"               , "-"               , "SPI2_CE0_N"      ,
+    "SD0_CLK"         , "-"               , "SPI0_MOSI"       , "SD1_CLK"         , "ARM_TRST"        , "SPI2_SCLK"       ,
+    "SD0_CMD"         , "GPCLK0"          , "SPI0_SCLK"       , "SD1_CMD"         , "ARM_RTCK"        , "SPI2_MOSI"       ,
+    "SD0_DAT0"        , "GPCLK1"          , "PCM_CLK"         , "SD1_DAT0"        , "ARM_TDO"         , "SPI2_MISO"       ,
+    "SD0_DAT1"        , "GPCLK2"          , "PCM_FS"          , "SD1_DAT1"        , "ARM_TCK"         , "SD_CARD_LED"     ,
+    "SD0_DAT2"        , "PWM0_0"          , "PCM_DIN"         , "SD1_DAT2"        , "ARM_TDI"         , "-"               ,
+    "SD0_DAT3"        , "PWM0_1"          , "PCM_DOUT"        , "SD1_DAT3"        , "ARM_TMS"         , "-"               ,
+};
+
+static const char *gpio_fsel_alts[8] =
 {
     " ", " ", "5", "4", "0", "1", "2", "3"
 };
 
+static const char *gpio_pull_names[4] =
+{
+    "NONE", "DOWN", "UP", "?"
+};
+
 /* 0 = none, 1 = down, 2 = up */
-int gpio_default_pullstate[54] =
+static const int gpio_default_pullstate[54] =
 {
     2,2,2,2,2,2,2,2,2, /*GPIO0-8 UP*/
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /*GPIO9-27 DOWN*/
@@ -118,9 +181,6 @@ int gpio_default_pullstate[54] =
 
 #define BLOCK_SIZE  (4*1024)
 
-#define PROC_TYPE_BCM2708 0
-#define PROC_TYPE_BCM2709 1
-
 #define GPSET0    7
 #define GPSET1    8
 #define GPCLR0    10
@@ -131,9 +191,17 @@ int gpio_default_pullstate[54] =
 #define GPPUDCLK0 38
 #define GPPUDCLK1 39
 
+/* 2711 has a different mechanism for pin pull-up/down/enable  */
+#define GPPUPPDN0                57        /* Pin pull-up/down for pins 15:0  */
+#define GPPUPPDN1                58        /* Pin pull-up/down for pins 31:16 */
+#define GPPUPPDN2                59        /* Pin pull-up/down for pins 47:32 */
+#define GPPUPPDN3                60        /* Pin pull-up/down for pins 57:48 */
+
 
 /* Pointer to HW */
 static volatile uint32_t *gpio_base;
+static int is_2711;
+static const char **gpio_alt_names;
 
 void print_gpio_alts_info(int gpio)
 {
@@ -176,41 +244,43 @@ void delay_us(uint32_t delay)
 uint32_t get_hwbase(void)
 {
     const char *ranges_file = "/proc/device-tree/soc/ranges";
-    uint8_t ranges[8];
+    uint8_t ranges[12];
     FILE *fd;
     uint32_t ret = 0;
 
+    memset(ranges, 0, sizeof(ranges));
+
     if ((fd = fopen(ranges_file, "rb")) == NULL)
     {
-        printf ("Can't open '%s'\n", ranges_file);
+        printf("Can't open '%s'\n", ranges_file);
+    }
+    else if (fread(ranges, 1, sizeof(ranges), fd) >= 8)
+    {
+        ret = (ranges[4] << 24) |
+              (ranges[5] << 16) |
+              (ranges[6] << 8) |
+              (ranges[7] << 0);
+        if (!ret)
+            ret = (ranges[8] << 24) |
+                  (ranges[9] << 16) |
+                  (ranges[10] << 8) |
+                  (ranges[11] << 0);
+        if ((ranges[0] != 0x7e) ||
+                (ranges[1] != 0x00) ||
+                (ranges[2] != 0x00) ||
+                (ranges[3] != 0x00) ||
+                ((ret != 0x20000000) && (ret != 0x3f000000) && (ret != 0xfe000000)))
+        {
+            printf("Unexpected ranges data (%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x)\n",
+                   ranges[0], ranges[1], ranges[2], ranges[3],
+                   ranges[4], ranges[5], ranges[6], ranges[7],
+                   ranges[8], ranges[9], ranges[10], ranges[11]);
+            ret = 0;
+        }
     }
     else
     {
-        ret = fread(ranges, 1, sizeof(ranges), fd);
-
-        if (ret  == sizeof(ranges))
-        {
-            ret = (ranges[4] << 24) |
-                  (ranges[5] << 16) |
-                  (ranges[6] << 8) |
-                  (ranges[7] << 0);
-            if ((ranges[0] != 0x7e) ||
-                    (ranges[1] != 0x00) ||
-                    (ranges[2] != 0x00) ||
-                    (ranges[3] != 0x00) ||
-                    ((ret != 0x20000000) && (ret != 0x3f000000)))
-            {
-                printf("Unexpected ranges data (%02x%02x%02x%02x %02x%02x%02x%02x)\n",
-                       ranges[0], ranges[1], ranges[2], ranges[3],
-                       ranges[4], ranges[5], ranges[6], ranges[7]);
-                ret = 0;
-            }
-        }
-        else
-        {
-            printf("Can't read '%s'\n", ranges_file);
-            ret = 0;
-        }
+	printf("Ranges data too short\n");
     }
 
     fclose(fd);
@@ -401,48 +471,83 @@ int gpio_set_pull(int gpio, int type)
     if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
     if (type < 0 || type > 2) return -1;
 
-    if (gpio < 32)
+    if (is_2711)
     {
-        *(gpio_base+GPPUD) = type;
-        delay_us(10);
-        *(gpio_base+GPPUDCLK0) = 0x1<<gpio;
-        delay_us(10);
-        *(gpio_base+GPPUD) = 0;
-        delay_us(10);
-        *(gpio_base+GPPUDCLK0) = 0;
-        delay_us(10);
+        int pullreg = GPPUPPDN0 + (gpio>>4);
+        int pullshift = (gpio & 0xf) << 1;
+        unsigned int pullbits;
+        unsigned int pull;
+
+        switch (type)
+        {
+        case PULL_NONE: pull = 0; break;
+        case PULL_UP: pull = 1; break;
+        case PULL_DOWN: pull = 2; break;
+        default: return 1; /* An illegal value */
+        }
+
+        pullbits = *(gpio_base + pullreg);
+        pullbits &= ~(3 << pullshift);
+        pullbits |= (pull << pullshift);
+        *(gpio_base + pullreg) = pullbits;
     }
     else
     {
-        gpio -= 32;
-        *(gpio_base+GPPUD) = type;
+        int clkreg = GPPUDCLK0 + (gpio>>5);
+        int clkbit = 1 << (gpio & 0x1f);
+
+        *(gpio_base + GPPUD) = type;
         delay_us(10);
-        *(gpio_base+GPPUDCLK1) = 0x1<<gpio;
+        *(gpio_base + clkreg) = clkbit;
         delay_us(10);
-        *(gpio_base+GPPUD) = 0;
+        *(gpio_base + GPPUD) = 0;
         delay_us(10);
-        *(gpio_base+GPPUDCLK1) = 0;
+        *(gpio_base + clkreg) = 0;
         delay_us(10);
     }
 
     return 0;
 }
 
+int get_gpio_pull(int pinnum)
+{
+    int pull = PULL_UNSET;
+    if (is_2711)
+    {
+        int pull_bits = (*(gpio_base + GPPUPPDN0 + (pinnum >> 4)) >> ((pinnum & 0xf)<<1)) & 0x3;
+        switch (pull_bits)
+        {
+        case 0: pull = PULL_NONE; break;
+        case 1: pull = PULL_UP; break;
+        case 2: pull = PULL_DOWN; break;
+        default: pull = PULL_UNSET; break; /* An illegal value */
+        }
+    }
+    return pull;
+}
 
 int gpio_get(int pinnum)
 {
     char name[512];
+    char pullstr[12];
     int level;
     int fsel;
+    int pull;
     int n;
 
     fsel = get_gpio_fsel(pinnum);
     gpio_fsel_to_namestr(pinnum, fsel, name);
     level = get_gpio_level(pinnum);
+    pullstr[0] = '\0';
+    pull = get_gpio_pull(pinnum);
+    if (pull != PULL_UNSET)
+        sprintf(pullstr, " pull=%s", gpio_pull_names[pull & 3]);
     if (fsel < 2)
-        printf("GPIO %d: level=%d fsel=%d func=%s\n", pinnum, level, fsel, name);
+        printf("GPIO %d: level=%d fsel=%d func=%s%s\n",
+               pinnum, level, fsel, name, pullstr);
     else
-        printf("GPIO %d: level=%d fsel=%d alt=%s func=%s\n", pinnum, level, fsel, gpio_fsel_alts[fsel], name);
+        printf("GPIO %d: level=%d fsel=%d alt=%s func=%s%s\n",
+               pinnum, level, fsel, gpio_fsel_alts[fsel], name, pullstr);
     return 0;
 }
 
@@ -628,6 +733,10 @@ int main(int argc, char *argv[])
     if (funcs)
     {
         int pin;
+
+        /* Make an educated guess that doesn't need root privilege */
+        is_2711 = (get_hwbase() == 0xfe000000);
+        gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
         printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
         for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++)
         {
@@ -650,8 +759,6 @@ int main(int argc, char *argv[])
             return 0;
         }
 
-        hwbase = get_hwbase();
-
         if (!hwbase)
             return 1;
 
@@ -664,11 +771,14 @@ int main(int argc, char *argv[])
         gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+hwbase);
     }
 
-    if ((int32_t)gpio_base == -1)
+    if (gpio_base == (uint32_t *)-1)
     {
         printf("mmap (GPIO) failed: %s\n", strerror (errno));
         return 1;
     }
+
+    is_2711 = (*(gpio_base+GPPUPPDN3) != 0x6770696f);
+    gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
 
     if (set || get)
     {
