@@ -745,12 +745,14 @@ int main(int argc, char *argv[])
 
     all_pins = !(gpiomask[0] | gpiomask[1]);
 
+    hwbase = get_hwbase();
+
     if (funcs)
     {
         int pin;
 
         /* Make an educated guess that doesn't need root privilege */
-        is_2711 = (get_hwbase() == 0xfe000000);
+        is_2711 = (hwbase == 0xfe000000);
         gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
         printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
         for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++)
