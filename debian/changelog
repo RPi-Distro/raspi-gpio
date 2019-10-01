@@ -1,3 +1,13 @@
+raspi-gpio (0.20191001) buster; urgency=medium
+
+  [ Andrew Scheller ]
+  * Whitespace tidyup (and re-ran astyle). No functional changes.
+
+  [ Dave Stevenson ]
+  * Initialise hwbase so that access without /dev/gpiomem works again
+
+ -- Serge Schneider <serge@raspberrypi.org>  Tue, 01 Oct 2019 15:58:09 +0100
+
 raspi-gpio (0.20190620) buster; urgency=medium
 
   [ Phil Elwell ]
