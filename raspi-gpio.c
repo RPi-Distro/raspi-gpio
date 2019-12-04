@@ -395,8 +395,9 @@ int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
 void print_raw_gpio_regs(void)
 {
     int i;
+    int end = is_2711 ? GPPUPPDN3 : GPPUDCLK1;
 
-    for (i = 0; i <= GPPUDCLK1; i++)
+    for (i = 0; i <= end; i++)
     {
         uint32_t val = *(gpio_base + i);
         if ((i & 3) == 0)
