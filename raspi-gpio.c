@@ -400,7 +400,7 @@ void print_raw_gpio_regs(void)
     for (i = 0; i <= end; i++)
     {
         /* Skip over non-GPIO registers on Pi4 models */
-        if (i > GPPUDCLK1)
+        if (i == (GPPUDCLK1 + 1))
             i = GPPUPPDN0;
 
         uint32_t val = *(gpio_base + i);
