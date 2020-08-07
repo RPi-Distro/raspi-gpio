@@ -4,6 +4,8 @@
   Author: James Adams
 */
 
+#define _LARGEFILE64_SOURCE
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -241,12 +243,12 @@ void delay_us(uint32_t delay)
     }
 }
 
-uint32_t get_hwbase(void)
+uint64_t get_hwbase(void)
 {
     const char *ranges_file = "/proc/device-tree/soc/ranges";
     uint8_t ranges[12];
     FILE *fd;
-    uint32_t ret = 0;
+    uint64_t ret = 0;
 
     memset(ranges, 0, sizeof(ranges));
 
@@ -260,16 +262,29 @@ uint32_t get_hwbase(void)
               (ranges[5] << 16) |
               (ranges[6] << 8) |
               (ranges[7] << 0);
-        if (!ret)
-            ret = (ranges[8] << 24) |
-                  (ranges[9] << 16) |
-                  (ranges[10] << 8) |
-                  (ranges[11] << 0);
+        if (!(ret & 0xFF000000))
+            ret = ((uint64_t)ranges[4] << 56) |
+                  ((uint64_t)ranges[5] << 48) |
+                  ((uint64_t)ranges[6] << 40) |
+                  ((uint64_t)ranges[7] << 32) |
+                  ((uint64_t)ranges[8] << 24) |
+                  ((uint64_t)ranges[9] << 16) |
+                  ((uint64_t)ranges[10] << 8) |
+                  ((uint64_t)ranges[11] << 0);
+        if ((ranges[0] == 0x7c) &&
+                (ranges[1] == 0x00) &&
+                (ranges[2] == 0x00) &&
+                (ranges[3] == 0x00) &&
+                (ret == 0x47c000000))
+        {
+            ranges[0] = 0x7e; /* Change to I/O peripheral range */
+            ret += 0x2000000;
+        }
         if ((ranges[0] != 0x7e) ||
                 (ranges[1] != 0x00) ||
                 (ranges[2] != 0x00) ||
                 (ranges[3] != 0x00) ||
-                ((ret != 0x20000000) && (ret != 0x3f000000) && (ret != 0xfe000000)))
+                ((ret != 0x20000000) && (ret != 0x3f000000) && (ret != 0xfe000000) && (ret != 0x47e000000)))
         {
             printf("Unexpected ranges data (%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x)\n",
                    ranges[0], ranges[1], ranges[2], ranges[3],
@@ -556,7 +571,6 @@ int gpio_get(int pinnum)
     int level;
     int fsel;
     int pull;
-    int n;
 
     fsel = get_gpio_fsel(pinnum);
     gpio_fsel_to_namestr(pinnum, fsel, name);
@@ -603,7 +617,7 @@ int gpio_set(int pinnum, int fsparam, int drive, int pull)
 
 int main(int argc, char *argv[])
 {
-    uint32_t hwbase;
+    uint64_t hwbase;
     int fd;
     int ret;
     int n;
@@ -760,7 +774,7 @@ int main(int argc, char *argv[])
         int pin;
 
         /* Make an educated guess that doesn't need root privilege */
-        is_2711 = (hwbase == 0xfe000000);
+        is_2711 = (hwbase == 0xfe000000) || (hwbase == 0x47e000000);
         gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
         printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
         for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++)
@@ -793,7 +807,7 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+hwbase);
+        gpio_base = (uint32_t *)mmap64(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+hwbase);
     }
 
     if (gpio_base == (uint32_t *)-1)
