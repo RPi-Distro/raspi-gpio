@@ -422,7 +422,7 @@ void print_help()
     printf("  ip      set GPIO as input\n");
     printf("  op      set GPIO as output\n");
     printf("  a0-a5   set GPIO to alternate function alt0-alt5\n");
-    printf("  pu      set GPIO in-pad pull up\n");
+    printf("  pu      set GPIO pin-pad pull up\n");
     printf("  pd      set GPIO pin-pad pull down\n");
     printf("  pn      set GPIO pull none (no pull)\n");
     printf("  dh      set GPIO to drive to high (1) level (only valid if set to be an output)\n");
@@ -432,8 +432,8 @@ void print_help()
     printf("  %s get 20           Prints state of GPIO20\n", name);
     printf("  %s get 20,21        Prints state of GPIO20 and GPIO21\n", name);
     printf("  %s set 20 a5        Set GPIO20 to ALT5 function (GPCLK0)\n", name);
-    printf("  %s set 20 pu        Enable GPIO20 ~50k in-pad pull up\n", name);
-    printf("  %s set 20 pd        Enable GPIO20 ~50k in-pad pull down\n", name);
+    printf("  %s set 20 pu        Enable GPIO20 ~50k pin-pad pull up\n", name);
+    printf("  %s set 20 pd        Enable GPIO20 ~50k pin-pad pull down\n", name);
     printf("  %s set 20 op        Set GPIO20 to be an output\n", name);
     printf("  %s set 20 dl        Set GPIO20 to output low/zero (must already be set as an output)\n", name);
     printf("  %s set 20 ip pd     Set GPIO20 to input with pull down\n", name);
