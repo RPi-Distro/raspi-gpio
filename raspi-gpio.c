@@ -423,7 +423,7 @@ void print_help()
     printf("  op      set GPIO as output\n");
     printf("  a0-a5   set GPIO to alternate function alt0-alt5\n");
     printf("  pu      set GPIO in-pad pull up\n");
-    printf("  pd      set GPIO pin-pad pull down\n");
+    printf("  pd      set GPIO in-pad pull down\n");
     printf("  pn      set GPIO pull none (no pull)\n");
     printf("  dh      set GPIO to drive to high (1) level (only valid if set to be an output)\n");
     printf("  dl      set GPIO to drive low (0) level (only valid if set to be an output)\n");
