@@ -514,7 +514,7 @@ int main(int argc, char *argv[])
     if (!argc)
     {
         printf("No arguments given - try \"raspi-gpio help\"\n");
-        return 0;
+        return 1;
     }
 
     cmd = *(argv++);
@@ -608,7 +608,7 @@ int main(int argc, char *argv[])
     if (set && !argc)
     {
         printf("Nothing to set\n");
-        return 0;
+        return 1;
     }
 
     /* parse remaining args */
@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
         if (geteuid())
         {
             printf("Must be root\n");
-            return 0;
+            return 1;
         }
 
         if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
