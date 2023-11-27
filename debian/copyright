@@ -3,11 +3,11 @@ Upstream-Name: raspi-gpio
 Source: https://github.com/RPi-Distro/raspi-gpio
 
 Files: *
-Copyright: 2015 James Adams <james@raspberrypi.org>
+Copyright: 2015 James Adams <james@raspberrypi.com>
 License: BSD-3-Clause
 
 Files: debian/*
-Copyright: 2015 Serge Schneider <serge@raspberrypi.org>
+Copyright: 2015 Serge Schneider <serge@raspberrypi.com>
 License: BSD-3-Clause
 
 License: BSD-3-Clause

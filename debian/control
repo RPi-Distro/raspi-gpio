@@ -1,10 +1,10 @@
 Source: raspi-gpio
 Section: utils
 Priority: optional
-Maintainer: Serge Schneider <serge@raspberrypi.org>
+Maintainer: Serge Schneider <serge@raspberrypi.com>
 Build-Depends: debhelper-compat (= 12)
 Standards-Version: 3.9.8
-Homepage: https://www.raspberrypi.org/
+Homepage: https://www.raspberrypi.com/
 Vcs-Git: https://github.com/RPi-Distro/raspi-gpio.git -b debian
 Vcs-Browser: https://github.com/RPi-Distro/raspi-gpio/tree/debian
 
