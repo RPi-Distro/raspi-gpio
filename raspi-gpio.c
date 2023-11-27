@@ -318,6 +318,9 @@ struct gpio_chip *get_gpio_chip(void)
         chip = &gpio_chip_2711;
         chip->reg_base = 0xfe000000 + GPIO_BASE_OFFSET;
         break;
+    case 4: /* BCM2712 */
+        printf("raspi-gpio is not supported on Pi 5 - use `pinctrl`\n");
+        exit(1);
     default:
         printf("Unrecognised revision code\n");
         exit(1);
@@ -669,7 +672,7 @@ int main(int argc, char *argv[])
             if (all_pins || gpiomask[pin / 32] & (1 << (pin % 32)))
                 print_gpio_alts_info(chip, pin);
         }
-        return 0;
+        goto deprecation_check;
     }
 
     /* Check for /dev/gpiomem, else we need root access for /dev/mem */
@@ -734,6 +737,17 @@ int main(int argc, char *argv[])
 
     if (raw)
         print_raw_gpio_regs(chip);
+
+  deprecation_check:
+    if (isatty(STDOUT_FILENO))
+    {
+        fd = open("/tmp/raspi-gpio-deprecated", O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+        if (fd >= 0)
+        {
+            printf("[ raspi-gpio is deprecated - try `pinctrl` instead ]\n");
+            close(fd);
+        }
+    }
 
     return 0;
 }
