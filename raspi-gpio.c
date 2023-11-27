@@ -16,6 +16,8 @@
 #include <sys/mman.h>
 #include <time.h>
 
+#define GPIO_BASE_OFFSET 0x00200000
+
 #define DRIVE_UNSET -1
 #define DRIVE_LOW    0
 #define DRIVE_HIGH   1
@@ -28,30 +30,85 @@
 #define FUNC_UNSET  -1
 #define FUNC_IP      0
 #define FUNC_OP      1
-#define FUNC_A0      4
-#define FUNC_A1      5
-#define FUNC_A2      6
-#define FUNC_A3      7
-#define FUNC_A4      3
-#define FUNC_A5      2
+#define FUNC_ALT(x)  (2 + (x))
+#define FUNC_A0      FUNC_ALT(0)
+#define FUNC_A1      FUNC_ALT(1)
+#define FUNC_A2      FUNC_ALT(2)
+#define FUNC_A3      FUNC_ALT(3)
+#define FUNC_A4      FUNC_ALT(4)
+#define FUNC_A5      FUNC_ALT(5)
 
-#define GPIO_MIN     0
-#define GPIO_MAX     53
+/* 2835 register offsets */
+#define GPFSEL0      0
+#define GPFSEL1      1
+#define GPFSEL2      2
+#define GPFSEL3      3
+#define GPFSEL4      4
+#define GPFSEL5      5
+#define GPSET0       7
+#define GPSET1       8
+#define GPCLR0       10
+#define GPCLR1       11
+#define GPLEV0       13
+#define GPLEV1       14
+#define GPPUD        37
+#define GPPUDCLK0    38
+#define GPPUDCLK1    39
 
-static const char *gpio_alt_names_2708[54*6] =
+/* 2711 has a different mechanism for pin pull-up/down/enable  */
+#define GPPUPPDN0    57        /* Pin pull-up/down for pins 15:0  */
+#define GPPUPPDN1    58        /* Pin pull-up/down for pins 31:16 */
+#define GPPUPPDN2    59        /* Pin pull-up/down for pins 47:32 */
+#define GPPUPPDN3    60        /* Pin pull-up/down for pins 57:48 */
+
+struct gpio_chip
 {
-    "SDA0"      , "SA5"        , "PCLK"      , "AVEOUT_VCLK"   , "AVEIN_VCLK" , "-"         ,
-    "SCL0"      , "SA4"        , "DE"        , "AVEOUT_DSYNC"  , "AVEIN_DSYNC", "-"         ,
-    "SDA1"      , "SA3"        , "LCD_VSYNC" , "AVEOUT_VSYNC"  , "AVEIN_VSYNC", "-"         ,
-    "SCL1"      , "SA2"        , "LCD_HSYNC" , "AVEOUT_HSYNC"  , "AVEIN_HSYNC", "-"         ,
+    const char *name;
+    uint32_t reg_base;
+    uint32_t reg_size;
+    unsigned int gpio_count;
+    unsigned int fsel_count;
+    const char *info_header;
+    const char **alt_names;
+    const int *default_pulls;
+
+    int (*get_level)(struct gpio_chip *chip, unsigned int gpio);
+    int (*get_fsel)(struct gpio_chip *chip, unsigned int gpio);
+    int (*get_pull)(struct gpio_chip *chip, unsigned int gpio);
+    int (*set_level)(struct gpio_chip *chip, unsigned int gpio, int level);
+    int (*set_fsel)(struct gpio_chip *chip, unsigned int gpio, int fsel);
+    int (*set_pull)(struct gpio_chip *chip, unsigned int gpio, int pull);
+    int (*next_reg)(int reg);
+
+    volatile uint32_t *base;
+};
+
+static int bcm2835_get_level(struct gpio_chip *chip, unsigned int gpio);
+static int bcm2835_get_fsel(struct gpio_chip *chip, unsigned int gpio);
+static int bcm2835_get_pull(struct gpio_chip *chip, unsigned int gpio);
+static int bcm2835_set_level(struct gpio_chip *chip, unsigned int gpio, int level);
+static int bcm2835_set_fsel(struct gpio_chip *chip, unsigned int gpio, int fsel);
+static int bcm2835_set_pull(struct gpio_chip *chip, unsigned int gpio, int pull);
+static int bcm2835_next_reg(int reg);
+
+static int bcm2711_get_pull(struct gpio_chip *chip, unsigned int gpio);
+static int bcm2711_set_pull(struct gpio_chip *chip, unsigned int gpio, int pull);
+static int bcm2711_next_reg(int reg);
+
+static const char *gpio_alt_names_2835[54*6] =
+{
+    "SDA0"      , "SA5"        , "PCLK"      , "AVEOUT_VCLK"   , "AVEIN_VCLK" , 0           ,
+    "SCL0"      , "SA4"        , "DE"        , "AVEOUT_DSYNC"  , "AVEIN_DSYNC", 0           ,
+    "SDA1"      , "SA3"        , "LCD_VSYNC" , "AVEOUT_VSYNC"  , "AVEIN_VSYNC", 0           ,
+    "SCL1"      , "SA2"        , "LCD_HSYNC" , "AVEOUT_HSYNC"  , "AVEIN_HSYNC", 0           ,
     "GPCLK0"    , "SA1"        , "DPI_D0"    , "AVEOUT_VID0"   , "AVEIN_VID0" , "ARM_TDI"   ,
     "GPCLK1"    , "SA0"        , "DPI_D1"    , "AVEOUT_VID1"   , "AVEIN_VID1" , "ARM_TDO"   ,
     "GPCLK2"    , "SOE_N_SE"   , "DPI_D2"    , "AVEOUT_VID2"   , "AVEIN_VID2" , "ARM_RTCK"  ,
-    "SPI0_CE1_N", "SWE_N_SRW_N", "DPI_D3"    , "AVEOUT_VID3"   , "AVEIN_VID3" , "-"         ,
-    "SPI0_CE0_N", "SD0"        , "DPI_D4"    , "AVEOUT_VID4"   , "AVEIN_VID4" , "-"         ,
-    "SPI0_MISO" , "SD1"        , "DPI_D5"    , "AVEOUT_VID5"   , "AVEIN_VID5" , "-"         ,
-    "SPI0_MOSI" , "SD2"        , "DPI_D6"    , "AVEOUT_VID6"   , "AVEIN_VID6" , "-"         ,
-    "SPI0_SCLK" , "SD3"        , "DPI_D7"    , "AVEOUT_VID7"   , "AVEIN_VID7" , "-"         ,
+    "SPI0_CE1_N", "SWE_N_SRW_N", "DPI_D3"    , "AVEOUT_VID3"   , "AVEIN_VID3" , 0           ,
+    "SPI0_CE0_N", "SD0"        , "DPI_D4"    , "AVEOUT_VID4"   , "AVEIN_VID4" , 0           ,
+    "SPI0_MISO" , "SD1"        , "DPI_D5"    , "AVEOUT_VID5"   , "AVEIN_VID5" , 0           ,
+    "SPI0_MOSI" , "SD2"        , "DPI_D6"    , "AVEOUT_VID6"   , "AVEIN_VID6" , 0           ,
+    "SPI0_SCLK" , "SD3"        , "DPI_D7"    , "AVEOUT_VID7"   , "AVEIN_VID7" , 0           ,
     "PWM0"      , "SD4"        , "DPI_D8"    , "AVEOUT_VID8"   , "AVEIN_VID8" , "ARM_TMS"   ,
     "PWM1"      , "SD5"        , "DPI_D9"    , "AVEOUT_VID9"   , "AVEIN_VID9" , "ARM_TCK"   ,
     "TXD0"      , "SD6"        , "DPI_D10"   , "AVEOUT_VID10"  , "AVEIN_VID10", "TXD1"      ,
@@ -62,38 +119,38 @@ static const char *gpio_alt_names_2708[54*6] =
     "PCM_FS"    , "SD11"       , "DPI_D15"   , "I2CSL_SCL_SCLK", "SPI1_MISO"  , "PWM1"      ,
     "PCM_DIN"   , "SD12"       , "DPI_D16"   , "I2CSL_MISO"    , "SPI1_MOSI"  , "GPCLK0"    ,
     "PCM_DOUT"  , "SD13"       , "DPI_D17"   , "I2CSL_CE_N"    , "SPI1_SCLK"  , "GPCLK1"    ,
-    "SD0_CLK"   , "SD14"       , "DPI_D18"   , "SD1_CLK"       , "ARM_TRST"   , "-"         ,
-    "SD0_CMD"   , "SD15"       , "DPI_D19"   , "SD1_CMD"       , "ARM_RTCK"   , "-"         ,
-    "SD0_DAT0"  , "SD16"       , "DPI_D20"   , "SD1_DAT0"      , "ARM_TDO"    , "-"         ,
-    "SD0_DAT1"  , "SD17"       , "DPI_D21"   , "SD1_DAT1"      , "ARM_TCK"    , "-"         ,
-    "SD0_DAT2"  , "TE0"        , "DPI_D22"   , "SD1_DAT2"      , "ARM_TDI"    , "-"         ,
-    "SD0_DAT3"  , "TE1"        , "DPI_D23"   , "SD1_DAT3"      , "ARM_TMS"    , "-"         ,
-    "SDA0"      , "SA5"        , "PCM_CLK"   , "FL0"           , "-"          , "-"         ,
-    "SCL0"      , "SA4"        , "PCM_FS"    , "FL1"           , "-"          , "-"         ,
-    "TE0"       , "SA3"        , "PCM_DIN"   , "CTS0"          , "-"          , "CTS1"      ,
-    "FL0"       , "SA2"        , "PCM_DOUT"  , "RTS0"          , "-"          , "RTS1"      ,
-    "GPCLK0"    , "SA1"        , "RING_OCLK" , "TXD0"          , "-"          , "TXD1"      ,
-    "FL1"       , "SA0"        , "TE1"       , "RXD0"          , "-"          , "RXD1"      ,
-    "GPCLK0"    , "SOE_N_SE"   , "TE2"       , "SD1_CLK"       , "-"          , "-"         ,
-    "SPI0_CE1_N", "SWE_N_SRW_N", "-"         , "SD1_CMD"       , "-"          , "-"         ,
-    "SPI0_CE0_N", "SD0"        , "TXD0"      , "SD1_DAT0"      , "-"          , "-"         ,
-    "SPI0_MISO" , "SD1"        , "RXD0"      , "SD1_DAT1"      , "-"          , "-"         ,
-    "SPI0_MOSI" , "SD2"        , "RTS0"      , "SD1_DAT2"      , "-"          , "-"         ,
-    "SPI0_SCLK" , "SD3"        , "CTS0"      , "SD1_DAT3"      , "-"          , "-"         ,
-    "PWM0"      , "SD4"        , "-"         , "SD1_DAT4"      , "SPI2_MISO"  , "TXD1"      ,
+    "SD0_CLK"   , "SD14"       , "DPI_D18"   , "SD1_CLK"       , "ARM_TRST"   , 0           ,
+    "SD0_CMD"   , "SD15"       , "DPI_D19"   , "SD1_CMD"       , "ARM_RTCK"   , 0           ,
+    "SD0_DAT0"  , "SD16"       , "DPI_D20"   , "SD1_DAT0"      , "ARM_TDO"    , 0           ,
+    "SD0_DAT1"  , "SD17"       , "DPI_D21"   , "SD1_DAT1"      , "ARM_TCK"    , 0           ,
+    "SD0_DAT2"  , "TE0"        , "DPI_D22"   , "SD1_DAT2"      , "ARM_TDI"    , 0           ,
+    "SD0_DAT3"  , "TE1"        , "DPI_D23"   , "SD1_DAT3"      , "ARM_TMS"    , 0           ,
+    "SDA0"      , "SA5"        , "PCM_CLK"   , "FL0"           , 0            , 0           ,
+    "SCL0"      , "SA4"        , "PCM_FS"    , "FL1"           , 0            , 0           ,
+    "TE0"       , "SA3"        , "PCM_DIN"   , "CTS0"          , 0            , "CTS1"      ,
+    "FL0"       , "SA2"        , "PCM_DOUT"  , "RTS0"          , 0            , "RTS1"      ,
+    "GPCLK0"    , "SA1"        , "RING_OCLK" , "TXD0"          , 0            , "TXD1"      ,
+    "FL1"       , "SA0"        , "TE1"       , "RXD0"          , 0            , "RXD1"      ,
+    "GPCLK0"    , "SOE_N_SE"   , "TE2"       , "SD1_CLK"       , 0            , 0           ,
+    "SPI0_CE1_N", "SWE_N_SRW_N", 0           , "SD1_CMD"       , 0            , 0           ,
+    "SPI0_CE0_N", "SD0"        , "TXD0"      , "SD1_DAT0"      , 0            , 0           ,
+    "SPI0_MISO" , "SD1"        , "RXD0"      , "SD1_DAT1"      , 0            , 0           ,
+    "SPI0_MOSI" , "SD2"        , "RTS0"      , "SD1_DAT2"      , 0            , 0           ,
+    "SPI0_SCLK" , "SD3"        , "CTS0"      , "SD1_DAT3"      , 0            , 0           ,
+    "PWM0"      , "SD4"        , 0           , "SD1_DAT4"      , "SPI2_MISO"  , "TXD1"      ,
     "PWM1"      , "SD5"        , "TE0"       , "SD1_DAT5"      , "SPI2_MOSI"  , "RXD1"      ,
     "GPCLK1"    , "SD6"        , "TE1"       , "SD1_DAT6"      , "SPI2_SCLK"  , "RTS1"      ,
     "GPCLK2"    , "SD7"        , "TE2"       , "SD1_DAT7"      , "SPI2_CE0_N" , "CTS1"      ,
-    "GPCLK1"    , "SDA0"       , "SDA1"      , "TE0"           , "SPI2_CE1_N" , "-"         ,
-    "PWM1"      , "SCL0"       , "SCL1"      , "TE1"           , "SPI2_CE2_N" , "-"         ,
-    "SDA0"      , "SDA1"       , "SPI0_CE0_N", "-"             , "-"          , "SPI2_CE1_N",
-    "SCL0"      , "SCL1"       , "SPI0_MISO" , "-"             , "-"          , "SPI2_CE0_N",
+    "GPCLK1"    , "SDA0"       , "SDA1"      , "TE0"           , "SPI2_CE1_N" , 0           ,
+    "PWM1"      , "SCL0"       , "SCL1"      , "TE1"           , "SPI2_CE2_N" , 0           ,
+    "SDA0"      , "SDA1"       , "SPI0_CE0_N", 0               , 0            , "SPI2_CE1_N",
+    "SCL0"      , "SCL1"       , "SPI0_MISO" , 0               , 0            , "SPI2_CE0_N",
     "SD0_CLK"   , "FL0"        , "SPI0_MOSI" , "SD1_CLK"       , "ARM_TRST"   , "SPI2_SCLK" ,
     "SD0_CMD"   , "GPCLK0"     , "SPI0_SCLK" , "SD1_CMD"       , "ARM_RTCK"   , "SPI2_MOSI" ,
-    "SD0_DAT0"  , "GPCLK1"     , "PCM_CLK"   , "SD1_DAT0"      , "ARM_TDO"    , "-"         ,
-    "SD0_DAT1"  , "GPCLK2"     , "PCM_FS"    , "SD1_DAT1"      , "ARM_TCK"    , "-"         ,
-    "SD0_DAT2"  , "PWM0"       , "PCM_DIN"   , "SD1_DAT2"      , "ARM_TDI"    , "-"         ,
-    "SD0_DAT3"  , "PWM1"       , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"    , "-"
+    "SD0_DAT0"  , "GPCLK1"     , "PCM_CLK"   , "SD1_DAT0"      , "ARM_TDO"    , 0           ,
+    "SD0_DAT1"  , "GPCLK2"     , "PCM_FS"    , "SD1_DAT1"      , "ARM_TCK"    , 0           ,
+    "SD0_DAT2"  , "PWM0"       , "PCM_DIN"   , "SD1_DAT2"      , "ARM_TDI"    , 0           ,
+    "SD0_DAT3"  , "PWM1"       , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"    , 0
 };
 
 static const char *gpio_alt_names_2711[54*6] =
@@ -114,8 +171,8 @@ static const char *gpio_alt_names_2711[54*6] =
     "PWM0_1"    , "SD5"        , "DPI_D9"    , "SPI5_MISO"     , "RXD5"            , "SCL5"        ,
     "TXD0"      , "SD6"        , "DPI_D10"   , "SPI5_MOSI"     , "CTS5"            , "TXD1"        ,
     "RXD0"      , "SD7"        , "DPI_D11"   , "SPI5_SCLK"     , "RTS5"            , "RXD1"        ,
-    "-"         , "SD8"        , "DPI_D12"   , "CTS0"          , "SPI1_CE2_N"      , "CTS1"        ,
-    "-"         , "SD9"        , "DPI_D13"   , "RTS0"          , "SPI1_CE1_N"      , "RTS1"        ,
+    0           , "SD8"        , "DPI_D12"   , "CTS0"          , "SPI1_CE2_N"      , "CTS1"        ,
+    0           , "SD9"        , "DPI_D13"   , "RTS0"          , "SPI1_CE1_N"      , "RTS1"        ,
     "PCM_CLK"   , "SD10"       , "DPI_D14"   , "SPI6_CE0_N"    , "SPI1_CE0_N"      , "PWM0_0"      ,
     "PCM_FS"    , "SD11"       , "DPI_D15"   , "SPI6_MISO"     , "SPI1_MISO"       , "PWM0_1"      ,
     "PCM_DIN"   , "SD12"       , "DPI_D16"   , "SPI6_MOSI"     , "SPI1_MOSI"       , "GPCLK0"      ,
@@ -124,39 +181,34 @@ static const char *gpio_alt_names_2711[54*6] =
     "SD0_CMD"   , "SD15"       , "DPI_D19"   , "SD1_CMD"       , "ARM_RTCK"        , "SCL6"        ,
     "SD0_DAT0"  , "SD16"       , "DPI_D20"   , "SD1_DAT0"      , "ARM_TDO"         , "SPI3_CE1_N"  ,
     "SD0_DAT1"  , "SD17"       , "DPI_D21"   , "SD1_DAT1"      , "ARM_TCK"         , "SPI4_CE1_N"  ,
-    "SD0_DAT2"  , "-"          , "DPI_D22"   , "SD1_DAT2"      , "ARM_TDI"         , "SPI5_CE1_N"  ,
-    "SD0_DAT3"  , "-"          , "DPI_D23"   , "SD1_DAT3"      , "ARM_TMS"         , "SPI6_CE1_N"  ,
-    "SDA0"      , "SA5"        , "PCM_CLK"   , "-"             , "MII_A_RX_ERR"    , "RGMII_MDIO"  ,
-    "SCL0"      , "SA4"        , "PCM_FS"    , "-"             , "MII_A_TX_ERR"    , "RGMII_MDC"   ,
-    "-"         , "SA3"        , "PCM_DIN"   , "CTS0"          , "MII_A_CRS"       , "CTS1"        ,
-    "-"         , "SA2"        , "PCM_DOUT"  , "RTS0"          , "MII_A_COL"       , "RTS1"        ,
-    "GPCLK0"    , "SA1"        , "-"         , "TXD0"          , "SD_CARD_PRES"    , "TXD1"        ,
-    "-"         , "SA0"        , "-"         , "RXD0"          , "SD_CARD_WRPROT"  , "RXD1"        ,
-    "GPCLK0"    , "SOE_N_SE"   , "-"         , "SD1_CLK"       , "SD_CARD_LED"     , "RGMII_IRQ"   ,
-    "SPI0_CE1_N", "SWE_N_SRW_N", "-"         , "SD1_CMD"       , "RGMII_START_STOP", "-"           ,
+    "SD0_DAT2"  , 0            , "DPI_D22"   , "SD1_DAT2"      , "ARM_TDI"         , "SPI5_CE1_N"  ,
+    "SD0_DAT3"  , 0            , "DPI_D23"   , "SD1_DAT3"      , "ARM_TMS"         , "SPI6_CE1_N"  ,
+    "SDA0"      , "SA5"        , "PCM_CLK"   , 0               , "MII_A_RX_ERR"    , "RGMII_MDIO"  ,
+    "SCL0"      , "SA4"        , "PCM_FS"    , 0               , "MII_A_TX_ERR"    , "RGMII_MDC"   ,
+    0           , "SA3"        , "PCM_DIN"   , "CTS0"          , "MII_A_CRS"       , "CTS1"        ,
+    0           , "SA2"        , "PCM_DOUT"  , "RTS0"          , "MII_A_COL"       , "RTS1"        ,
+    "GPCLK0"    , "SA1"        , 0           , "TXD0"          , "SD_CARD_PRES"    , "TXD1"        ,
+    0           , "SA0"        , 0           , "RXD0"          , "SD_CARD_WRPROT"  , "RXD1"        ,
+    "GPCLK0"    , "SOE_N_SE"   , 0           , "SD1_CLK"       , "SD_CARD_LED"     , "RGMII_IRQ"   ,
+    "SPI0_CE1_N", "SWE_N_SRW_N", 0           , "SD1_CMD"       , "RGMII_START_STOP", 0             ,
     "SPI0_CE0_N", "SD0"        , "TXD0"      , "SD1_DAT0"      , "RGMII_RX_OK"     , "MII_A_RX_ERR",
     "SPI0_MISO" , "SD1"        , "RXD0"      , "SD1_DAT1"      , "RGMII_MDIO"      , "MII_A_TX_ERR",
     "SPI0_MOSI" , "SD2"        , "RTS0"      , "SD1_DAT2"      , "RGMII_MDC"       , "MII_A_CRS"   ,
     "SPI0_SCLK" , "SD3"        , "CTS0"      , "SD1_DAT3"      , "RGMII_IRQ"       , "MII_A_COL"   ,
-    "PWM1_0"    , "SD4"        , "-"         , "SD1_DAT4"      , "SPI0_MISO"       , "TXD1"        ,
-    "PWM1_1"    , "SD5"        , "-"         , "SD1_DAT5"      , "SPI0_MOSI"       , "RXD1"        ,
-    "GPCLK1"    , "SD6"        , "-"         , "SD1_DAT6"      , "SPI0_SCLK"       , "RTS1"        ,
-    "GPCLK2"    , "SD7"        , "-"         , "SD1_DAT7"      , "SPI0_CE0_N"      , "CTS1"        ,
-    "GPCLK1"    , "SDA0"       , "SDA1"      , "-"             , "SPI0_CE1_N"      , "SD_CARD_VOLT",
-    "PWM0_1"    , "SCL0"       , "SCL1"      , "-"             , "SPI0_CE2_N"      , "SD_CARD_PWR0",
-    "SDA0"      , "SDA1"       , "SPI0_CE0_N", "-"             , "-"               , "SPI2_CE1_N"  ,
-    "SCL0"      , "SCL1"       , "SPI0_MISO" , "-"             , "-"               , "SPI2_CE0_N"  ,
-    "SD0_CLK"   , "-"          , "SPI0_MOSI" , "SD1_CLK"       , "ARM_TRST"        , "SPI2_SCLK"   ,
+    "PWM1_0"    , "SD4"        , 0           , "SD1_DAT4"      , "SPI0_MISO"       , "TXD1"        ,
+    "PWM1_1"    , "SD5"        , 0           , "SD1_DAT5"      , "SPI0_MOSI"       , "RXD1"        ,
+    "GPCLK1"    , "SD6"        , 0           , "SD1_DAT6"      , "SPI0_SCLK"       , "RTS1"        ,
+    "GPCLK2"    , "SD7"        , 0           , "SD1_DAT7"      , "SPI0_CE0_N"      , "CTS1"        ,
+    "GPCLK1"    , "SDA0"       , "SDA1"      , 0               , "SPI0_CE1_N"      , "SD_CARD_VOLT",
+    "PWM0_1"    , "SCL0"       , "SCL1"      , 0               , "SPI0_CE2_N"      , "SD_CARD_PWR0",
+    "SDA0"      , "SDA1"       , "SPI0_CE0_N", 0               , 0                 , "SPI2_CE1_N"  ,
+    "SCL0"      , "SCL1"       , "SPI0_MISO" , 0               , 0                 , "SPI2_CE0_N"  ,
+    "SD0_CLK"   , 0            , "SPI0_MOSI" , "SD1_CLK"       , "ARM_TRST"        , "SPI2_SCLK"   ,
     "SD0_CMD"   , "GPCLK0"     , "SPI0_SCLK" , "SD1_CMD"       , "ARM_RTCK"        , "SPI2_MOSI"   ,
     "SD0_DAT0"  , "GPCLK1"     , "PCM_CLK"   , "SD1_DAT0"      , "ARM_TDO"         , "SPI2_MISO"   ,
     "SD0_DAT1"  , "GPCLK2"     , "PCM_FS"    , "SD1_DAT1"      , "ARM_TCK"         , "SD_CARD_LED" ,
-    "SD0_DAT2"  , "PWM0_0"     , "PCM_DIN"   , "SD1_DAT2"      , "ARM_TDI"         , "-"           ,
-    "SD0_DAT3"  , "PWM0_1"     , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"         , "-"           ,
-};
-
-static const char *gpio_fsel_alts[8] =
-{
-    " ", " ", "5", "4", "0", "1", "2", "3"
+    "SD0_DAT2"  , "PWM0_0"     , "PCM_DIN"   , "SD1_DAT2"      , "ARM_TDI"         , 0             ,
+    "SD0_DAT3"  , "PWM0_1"     , "PCM_DOUT"  , "SD1_DAT3"      , "ARM_TMS"         , 0             ,
 };
 
 static const char *gpio_pull_names[4] =
@@ -165,7 +217,7 @@ static const char *gpio_pull_names[4] =
 };
 
 /* 0 = none, 1 = down, 2 = up */
-static const int gpio_default_pullstate[54] =
+static const int gpio_default_pullstate_2835[54] =
 {
     2,2,2,2,2,2,2,2,2, /*GPIO0-8 UP*/
     1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /*GPIO9-27 DOWN*/
@@ -177,231 +229,162 @@ static const int gpio_default_pullstate[54] =
     2,2,2,2,2,2,2,2 /*GPIO46-53 UP*/
 };
 
-#define GPIO_BASE_OFFSET  0x00200000
+struct gpio_chip gpio_chip_2835 =
+{
+    "bcm2835",
+    0x00200000,
+    0x1000,
+    54,
+    6,
+    "GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5",
+    gpio_alt_names_2835,
+    gpio_default_pullstate_2835,
+    bcm2835_get_level,
+    bcm2835_get_fsel,
+    bcm2835_get_pull,
+    bcm2835_set_level,
+    bcm2835_set_fsel,
+    bcm2835_set_pull,
+    bcm2835_next_reg,
+};
 
-#define BLOCK_SIZE  (4*1024)
+struct gpio_chip gpio_chip_2711 =
+{
+    "bcm2711",
+    0x00200000,
+    0x1000,
+    54,
+    6,
+    "GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5",
+    gpio_alt_names_2711,
+    gpio_default_pullstate_2835,
+    bcm2835_get_level,
+    bcm2835_get_fsel,
+    bcm2711_get_pull,
+    bcm2835_set_level,
+    bcm2835_set_fsel,
+    bcm2711_set_pull,
+    bcm2711_next_reg,
+};
 
-#define GPSET0    7
-#define GPSET1    8
-#define GPCLR0    10
-#define GPCLR1    11
-#define GPLEV0    13
-#define GPLEV1    14
-#define GPPUD     37
-#define GPPUDCLK0 38
-#define GPPUDCLK1 39
+struct gpio_chip *chip;
 
-/* 2711 has a different mechanism for pin pull-up/down/enable  */
-#define GPPUPPDN0                57        /* Pin pull-up/down for pins 15:0  */
-#define GPPUPPDN1                58        /* Pin pull-up/down for pins 31:16 */
-#define GPPUPPDN2                59        /* Pin pull-up/down for pins 47:32 */
-#define GPPUPPDN3                60        /* Pin pull-up/down for pins 57:48 */
-
-
-/* Pointer to HW */
-static volatile uint32_t *gpio_base;
-static int is_2711;
-static const char **gpio_alt_names;
-
-void print_gpio_alts_info(int gpio)
+void print_gpio_alts_info(struct gpio_chip *chip, int gpio)
 {
     int alt;
-    printf("%d", gpio);
-    if (gpio_default_pullstate[gpio] == 0)
-        printf(", NONE");
-    else if (gpio_default_pullstate[gpio] == 1)
-        printf(", DOWN");
-    else
-        printf(", UP");
-    for (alt=0; alt < 6; alt++)
+    printf("%d, %s", gpio, gpio_pull_names[chip->default_pulls[gpio]]);
+    for (alt = 0; alt < 6; alt++)
     {
-        printf(", %s", gpio_alt_names[gpio*6+alt]);
+        const char *name = chip->alt_names[gpio * chip->fsel_count + alt];
+        printf(", %s", name ? name : "-");
     }
     printf("\n");
 }
 
-void delay_us(uint32_t delay)
+struct gpio_chip *get_gpio_chip(void)
 {
-    struct timespec tv_req;
-    struct timespec tv_rem;
-    int i;
-    uint32_t del_ms, del_us;
-    del_ms = delay / 1000;
-    del_us = delay % 1000;
-    for (i=0; i<=del_ms; i++)
-    {
-        tv_req.tv_sec = 0;
-        if (i==del_ms) tv_req.tv_nsec = del_us*1000;
-        else          tv_req.tv_nsec = 1000000;
-        tv_rem.tv_sec = 0;
-        tv_rem.tv_nsec = 0;
-        nanosleep(&tv_req, &tv_rem);
-        if (tv_rem.tv_sec != 0 || tv_rem.tv_nsec != 0)
-            printf("timer oops!\n");
-    }
-}
-
-uint32_t get_hwbase(void)
-{
-    const char *ranges_file = "/proc/device-tree/soc/ranges";
-    uint8_t ranges[12];
+    struct gpio_chip *chip;
+    const char *revision_file = "/proc/device-tree/system/linux,revision";
+    uint8_t revision[4] = { 0 };
+    uint32_t cpu = 0;
     FILE *fd;
-    uint32_t ret = 0;
 
-    memset(ranges, 0, sizeof(ranges));
-
-    if ((fd = fopen(ranges_file, "rb")) == NULL)
+    if ((fd = fopen(revision_file, "rb")) == NULL)
     {
-        printf("Can't open '%s'\n", ranges_file);
-    }
-    else if (fread(ranges, 1, sizeof(ranges), fd) >= 8)
-    {
-        ret = (ranges[4] << 24) |
-              (ranges[5] << 16) |
-              (ranges[6] << 8) |
-              (ranges[7] << 0);
-        if (!ret)
-            ret = (ranges[8] << 24) |
-                  (ranges[9] << 16) |
-                  (ranges[10] << 8) |
-                  (ranges[11] << 0);
-        if ((ranges[0] != 0x7e) ||
-                (ranges[1] != 0x00) ||
-                (ranges[2] != 0x00) ||
-                (ranges[3] != 0x00) ||
-                ((ret != 0x20000000) && (ret != 0x3f000000) && (ret != 0xfe000000)))
-        {
-            printf("Unexpected ranges data (%02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x)\n",
-                   ranges[0], ranges[1], ranges[2], ranges[3],
-                   ranges[4], ranges[5], ranges[6], ranges[7],
-                   ranges[8], ranges[9], ranges[10], ranges[11]);
-            ret = 0;
-        }
+        printf("Can't open '%s'\n", revision_file);
     }
     else
     {
-        printf("Ranges data too short\n");
-    }
-
-    fclose(fd);
-
-    return ret;
-}
-
-int get_gpio_fsel(int gpio)
-{
-    /* GPIOFSEL0-GPIOFSEL5 with 10 sels per 32 bit reg,
-       3 bits per sel (so bits 0:29 used) */
-    uint32_t reg = gpio / 10;
-    uint32_t sel = gpio % 10;
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    /*printf("reg = %d, sel = %d ", reg, sel);*/
-    return (int)((*(gpio_base+reg))>>(3*sel))&0x7;
-}
-
-int set_gpio_fsel(int gpio, int fsel)
-{
-    static volatile uint32_t *tmp;
-    uint32_t reg = gpio / 10;
-    uint32_t sel = gpio % 10;
-    uint32_t mask;
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    tmp = gpio_base+reg;
-    mask = 0x7<<(3*sel);
-    mask = ~mask;
-    /*printf("reg = %d, sel = %d, mask=%08X\n", reg, sel, mask);*/
-    tmp = gpio_base+reg;
-    *tmp = *tmp & mask;
-    *tmp = *tmp | ((fsel&0x7)<<(3*sel));
-    return (int)((*tmp)>>(3*sel))&0x7;
-}
-
-int get_gpio_level(int gpio)
-{
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    if (gpio < 32)
-    {
-        return ((*(gpio_base+GPLEV0))>>gpio)&0x1;
-    }
-    else
-    {
-        gpio = gpio-32;
-        return ((*(gpio_base+GPLEV1))>>gpio)&0x1;
-    }
-}
-
-int set_gpio_value(int gpio, int value)
-{
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    if (value != 0)
-    {
-        if (gpio < 32)
-        {
-            *(gpio_base+GPSET0) = 0x1<<gpio;
-        }
+        if (fread(revision, 1, sizeof(revision), fd) == 4)
+            cpu = (revision[2] >> 4) & 0xf;
         else
-        {
-            gpio -= 32;
-            *(gpio_base+GPSET1) = 0x1<<gpio;
-        }
+            printf("Revision data too short\n");
+
+        fclose(fd);
     }
-    else
+
+    switch (cpu)
     {
-        if (gpio < 32)
-        {
-            *(gpio_base+GPCLR0) = 0x1<<gpio;
-        }
-        else
-        {
-            gpio -= 32;
-            *(gpio_base+GPCLR1) = 0x1<<gpio;
-        }
+    case 0: /* BCM2835 */
+        chip = &gpio_chip_2835;
+        chip->reg_base = 0x20000000 + GPIO_BASE_OFFSET;
+        break;
+    case 1: /* BCM2836 */
+    case 2: /* BCM2837 */
+        chip = &gpio_chip_2835;
+        chip->reg_base = 0x3f000000 + GPIO_BASE_OFFSET;
+        break;
+    case 3: /* BCM2711 */
+        chip = &gpio_chip_2711;
+        chip->reg_base = 0xfe000000 + GPIO_BASE_OFFSET;
+        break;
+    case 4: /* BCM2712 */
+        printf("raspi-gpio is not supported on Pi 5 - use `pinctrl`\n");
+        exit(1);
+    default:
+        printf("Unrecognised revision code\n");
+        exit(1);
     }
-    return 0;
+
+    return chip;
 }
 
-int gpio_fsel_to_namestr(int gpio, int fsel, char *name)
+const char *gpio_fsel_to_namestr(unsigned int gpio, int fsel)
 {
-    int altfn = 0;
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    switch (fsel)
+    const char *name = NULL;
+    static char alt_str[16];
+
+    if (gpio >= chip->gpio_count)
+        return NULL;
+
+    if (fsel == FUNC_IP)
+        return "INPUT";
+    else if (fsel == FUNC_OP)
+        return "OUTPUT";
+
+    fsel -= FUNC_A0;
+    if (fsel >= 0 && fsel < chip->fsel_count)
+        name = chip->alt_names[gpio * chip->fsel_count + fsel];
+    if (!name)
     {
-    case 0:
-        return sprintf(name, "INPUT");
-    case 1:
-        return sprintf(name, "OUTPUT");
-    case 2:
-        altfn = 5;
-        break;
-    case 3:
-        altfn = 4;
-        break;
-    case 4:
-        altfn = 0;
-        break;
-    case 5:
-        altfn = 1;
-        break;
-    case 6:
-        altfn = 2;
-        break;
-    default:  /*case 7*/
-        altfn = 3;
-        break;
+        sprintf(alt_str, "alt%d", fsel);
+        name = alt_str;
     }
-    return sprintf(name, "%s", gpio_alt_names[gpio*6 + altfn]);
+
+    return name;
 }
 
-void print_raw_gpio_regs(void)
+void print_raw_gpio_regs(struct gpio_chip *chip)
 {
-    int i;
+    int i = -1;
 
-    for (i = 0; i <= GPPUDCLK1; i++)
+    while (1)
     {
-        uint32_t val = *(gpio_base + i);
+        int new_i = chip->next_reg(i++);
+
+        if (new_i < 0)
+            break;
+        if (new_i != i)
+        {
+            /* Change rows if needed */
+            if ((i & ~3) != (new_i & ~3)) /* Not on the same row */
+            {
+                if (i & 3)                /* This row has been started */
+                    printf("\n");
+                i = new_i & ~3;
+            }
+        }
         if ((i & 3) == 0)
             printf("%02x:", i * 4);
-        printf(" %08x", val);
+        if (new_i != i)
+        {
+            /* Insert padding if needed */
+            printf("%*s", (new_i - i) * 9, "");
+            i = new_i;
+        }
+
+        printf(" %08x", chip->base[i]);
+
         if ((i & 3) == 3)
             printf("\n");
     }
@@ -424,14 +407,15 @@ void print_help()
     printf("and can be used to set the function, pulls and value of a GPIO.\n");
     printf("%s must be run as root.\n", name);
     printf("Use:\n");
-    printf("  %s get [GPIO]\n", name);
+    printf("  %s [<n>] get [GPIO]\n", name);
     printf("OR\n");
-    printf("  %s set <GPIO> [options]\n", name);
+    printf("  %s [<n>] set <GPIO> [options]\n", name);
     printf("OR\n");
-    printf("  %s funcs [GPIO]\n", name);
+    printf("  %s [<n>] funcs [GPIO]\n", name);
     printf("OR\n");
-    printf("  %s raw\n", name);
+    printf("  %s [<n>] raw\n", name);
     printf("\n");
+    printf("<n> is an option GPIO chip index (default 0)\n");
     printf("GPIO is a comma-separated list of pin numbers or ranges (without spaces),\n");
     printf("e.g. 4 or 18-21 or 7,9-11\n");
     printf("Note that omitting [GPIO] from %s get prints all GPIOs.\n", name);
@@ -442,7 +426,7 @@ void print_help()
     printf("  op      set GPIO as output\n");
     printf("  a0-a5   set GPIO to alternate function alt0-alt5\n");
     printf("  pu      set GPIO in-pad pull up\n");
-    printf("  pd      set GPIO pin-pad pull down\n");
+    printf("  pd      set GPIO in-pad pull down\n");
     printf("  pn      set GPIO pull none (no pull)\n");
     printf("  dh      set GPIO to drive to high (1) level (only valid if set to be an output)\n");
     printf("  dl      set GPIO to drive low (0) level (only valid if set to be an output)\n");
@@ -460,124 +444,40 @@ void print_help()
     printf("  %s set 20 op pn dh  Set GPIO20 to ouput with no pull and driving high\n", name);
 }
 
-/*
- * type:
- *   0 = no pull
- *   1 = pull down
- *   2 = pull up
- */
-int gpio_set_pull(int gpio, int type)
+int gpio_get(unsigned int gpio)
 {
-    if (gpio < GPIO_MIN || gpio > GPIO_MAX) return -1;
-    if (type < 0 || type > 2) return -1;
-
-    if (is_2711)
-    {
-        int pullreg = GPPUPPDN0 + (gpio>>4);
-        int pullshift = (gpio & 0xf) << 1;
-        unsigned int pullbits;
-        unsigned int pull;
-
-        switch (type)
-        {
-        case PULL_NONE:
-            pull = 0;
-            break;
-        case PULL_UP:
-            pull = 1;
-            break;
-        case PULL_DOWN:
-            pull = 2;
-            break;
-        default:
-            return 1; /* An illegal value */
-        }
-
-        pullbits = *(gpio_base + pullreg);
-        pullbits &= ~(3 << pullshift);
-        pullbits |= (pull << pullshift);
-        *(gpio_base + pullreg) = pullbits;
-    }
-    else
-    {
-        int clkreg = GPPUDCLK0 + (gpio>>5);
-        int clkbit = 1 << (gpio & 0x1f);
-
-        *(gpio_base + GPPUD) = type;
-        delay_us(10);
-        *(gpio_base + clkreg) = clkbit;
-        delay_us(10);
-        *(gpio_base + GPPUD) = 0;
-        delay_us(10);
-        *(gpio_base + clkreg) = 0;
-        delay_us(10);
-    }
-
-    return 0;
-}
-
-int get_gpio_pull(int pinnum)
-{
-    int pull = PULL_UNSET;
-    if (is_2711)
-    {
-        int pull_bits = (*(gpio_base + GPPUPPDN0 + (pinnum >> 4)) >> ((pinnum & 0xf)<<1)) & 0x3;
-        switch (pull_bits)
-        {
-        case 0:
-            pull = PULL_NONE;
-            break;
-        case 1:
-            pull = PULL_UP;
-            break;
-        case 2:
-            pull = PULL_DOWN;
-            break;
-        default:
-            pull = PULL_UNSET;
-            break; /* An illegal value */
-        }
-    }
-    return pull;
-}
-
-int gpio_get(int pinnum)
-{
-    char name[512];
-    char pullstr[12];
+    const char *name;
     int level;
     int fsel;
     int pull;
-    int n;
 
-    fsel = get_gpio_fsel(pinnum);
-    gpio_fsel_to_namestr(pinnum, fsel, name);
-    level = get_gpio_level(pinnum);
-    pullstr[0] = '\0';
-    pull = get_gpio_pull(pinnum);
+    fsel = chip->get_fsel(chip, gpio);
+    name = gpio_fsel_to_namestr(gpio, fsel);
+    level = chip->get_level(chip, gpio);
+
+    printf("GPIO %d: level=%d", gpio, level);
+
+    if (fsel >= FUNC_A0)
+        printf(" alt=%d", fsel - FUNC_A0);
+    printf(" func=%s", name);
+
+    pull = chip->get_pull(chip, gpio);
     if (pull != PULL_UNSET)
-        sprintf(pullstr, " pull=%s", gpio_pull_names[pull & 3]);
-    if (fsel < 2)
-        printf("GPIO %d: level=%d fsel=%d func=%s%s\n",
-               pinnum, level, fsel, name, pullstr);
-    else
-        printf("GPIO %d: level=%d fsel=%d alt=%s func=%s%s\n",
-               pinnum, level, fsel, gpio_fsel_alts[fsel], name, pullstr);
+        printf(" pull=%s", gpio_pull_names[pull & 3]);
+    printf("\n");
     return 0;
 }
 
-int gpio_set(int pinnum, int fsparam, int drive, int pull)
+int gpio_set(unsigned int gpio, int fsparam, int drive, int pull)
 {
-    /* set function */
     if (fsparam != FUNC_UNSET)
-        set_gpio_fsel(pinnum, fsparam);
+        chip->set_fsel(chip, gpio, fsparam);
 
-    /* set output value (check pin is output first) */
     if (drive != DRIVE_UNSET)
     {
-        if (get_gpio_fsel(pinnum) == 1)
+        if (chip->get_fsel(chip, gpio) == FUNC_OP)
         {
-            set_gpio_value(pinnum, drive);
+            chip->set_level(chip, gpio, drive);
         }
         else
         {
@@ -586,19 +486,16 @@ int gpio_set(int pinnum, int fsparam, int drive, int pull)
         }
     }
 
-    /* set pulls */
     if (pull != PULL_UNSET)
-        return gpio_set_pull(pinnum, pull);
+        return chip->set_pull(chip, gpio, pull);
 
     return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    uint32_t hwbase;
     int fd;
     int ret;
-    int n;
 
     /* arg parsing */
 
@@ -612,49 +509,61 @@ int main(int argc, char *argv[])
     uint32_t gpiomask[2] = { 0, 0 }; /* Enough for 0-53 */
     int all_pins = 0;
 
-    if (argc < 2)
+    const char *cmd;
+
+    argv++;
+    argc--;
+
+    if (!argc)
     {
         printf("No arguments given - try \"raspi-gpio help\"\n");
-        return 0;
+        return 1;
     }
 
-    if (strcmp(argv[1], "help") == 0)
+    cmd = *(argv++);
+    argc--;
+
+    if (strcmp(cmd, "help") == 0)
     {
         print_help();
         return 0;
     }
 
+    chip = get_gpio_chip();
+
     /* argc 2 or greater, next arg must be set, get or help */
-    get = strcmp(argv[1], "get") == 0;
-    set = strcmp(argv[1], "set") == 0;
-    funcs = strcmp(argv[1], "funcs") == 0;
-    raw = strcmp(argv[1], "raw") == 0;
+    get = strcmp(cmd, "get") == 0;
+    set = strcmp(cmd, "set") == 0;
+    funcs = strcmp(cmd, "funcs") == 0;
+    raw = strcmp(cmd, "raw") == 0;
     if (!set && !get && !funcs && !raw)
     {
-        printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", argv[1]);
+        printf("Unknown argument \"%s\" try \"raspi-gpio help\"\n", cmd);
         return 1;
     }
 
-    if ((get || funcs) && (argc > 3))
+    if ((get || funcs) && (argc > 1))
     {
         printf("Too many arguments\n");
         return 1;
     }
 
-    if (argc < 3 && set)
+    if (!argc && set)
     {
         printf("Need GPIO number to set\n");
         return 1;
     }
 
-    if (argc > 2) /* expect pin number(s) next */
+    if (argc) /* expect pin number(s) next */
     {
-        char *p = argv[2];
+        char *p = *(argv++);
+        argc--;
+
         while (p)
         {
             int pin, pin2, len;
             ret = sscanf(p, "%d%n", &pin, &len);
-            if (ret != 1 || pin < GPIO_MIN || pin > GPIO_MAX)
+            if (ret != 1 || pin >= chip->gpio_count)
                 break;
             p += len;
 
@@ -662,7 +571,7 @@ int main(int argc, char *argv[])
             {
                 p++;
                 ret = sscanf(p, "%d%n", &pin2, &len);
-                if (ret != 1 || pin2 < GPIO_MIN || pin2 > GPIO_MAX)
+                if (ret != 1 || pin2 >= chip->gpio_count)
                     break;
                 if (pin2 < pin)
                 {
@@ -699,85 +608,87 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (set && argc < 4)
+    if (set && !argc)
     {
         printf("Nothing to set\n");
-        return 0;
+        return 1;
     }
 
     /* parse remaining args */
-    for (n = 3; n < argc; n++)
+    while (argc)
     {
-        if (strcmp(argv[n], "dh") == 0)
+        const char *arg = *(argv++);
+        argc--;
+
+        if (strcmp(arg, "dh") == 0)
             drive = DRIVE_HIGH;
-        else if (strcmp(argv[n], "dl") == 0)
+        else if (strcmp(arg, "dl") == 0)
             drive = DRIVE_LOW;
-        else if (strcmp(argv[n], "ip") == 0)
+        else if (strcmp(arg, "ip") == 0)
             fsparam = FUNC_IP;
-        else if (strcmp(argv[n], "op") == 0)
+        else if (strcmp(arg, "op") == 0)
             fsparam = FUNC_OP;
-        else if (strcmp(argv[n], "a0") == 0)
+        else if (strcmp(arg, "a0") == 0)
             fsparam = FUNC_A0;
-        else if (strcmp(argv[n], "a1") == 0)
+        else if (strcmp(arg, "a1") == 0)
             fsparam = FUNC_A1;
-        else if (strcmp(argv[n], "a2") == 0)
+        else if (strcmp(arg, "a2") == 0)
             fsparam = FUNC_A2;
-        else if (strcmp(argv[n], "a3") == 0)
+        else if (strcmp(arg, "a3") == 0)
             fsparam = FUNC_A3;
-        else if (strcmp(argv[n], "a4") == 0)
+        else if (strcmp(arg, "a4") == 0)
             fsparam = FUNC_A4;
-        else if (strcmp(argv[n], "a5") == 0)
+        else if (strcmp(arg, "a5") == 0)
             fsparam = FUNC_A5;
-        else if (strcmp(argv[n], "pu") == 0)
+        else if (strcmp(arg, "pu") == 0)
             pull = PULL_UP;
-        else if (strcmp(argv[n], "pd") == 0)
+        else if (strcmp(arg, "pd") == 0)
             pull = PULL_DOWN;
-        else if (strcmp(argv[n], "pn") == 0)
+        else if (strcmp(arg, "pn") == 0)
             pull = PULL_NONE;
         else
         {
-            printf("Unknown argument \"%s\"\n", argv[n]);
+            printf("Unknown argument \"%s\"\n", arg);
             return 1;
         }
     }
 
+    if (fsparam >= FUNC_A0 && (fsparam - FUNC_A0) >= chip->fsel_count)
+    {
+        printf("Alt function a%d out of range\n", fsparam - FUNC_A0);
+        return 1;
+    }
     /* end arg parsing */
 
     all_pins = !(gpiomask[0] | gpiomask[1]);
-
-    hwbase = get_hwbase();
 
     if (funcs)
     {
         int pin;
 
-        /* Make an educated guess that doesn't need root privilege */
-        is_2711 = (hwbase == 0xfe000000);
-        gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
         printf("GPIO, DEFAULT PULL, ALT0, ALT1, ALT2, ALT3, ALT4, ALT5\n");
-        for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++)
+        for (pin = 0; pin < chip->gpio_count; pin++)
         {
             if (all_pins || gpiomask[pin / 32] & (1 << (pin % 32)))
-                print_gpio_alts_info(pin);
+                print_gpio_alts_info(chip, pin);
         }
-        return 0;
+        goto deprecation_check;
     }
 
     /* Check for /dev/gpiomem, else we need root access for /dev/mem */
     if ((fd = open ("/dev/gpiomem", O_RDWR | O_SYNC | O_CLOEXEC) ) >= 0)
     {
-        gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+        chip->base = (uint32_t *)mmap(0, chip->reg_size,
+                                      PROT_READ|PROT_WRITE, MAP_SHARED,
+                                      fd, 0);
     }
     else
     {
         if (geteuid())
         {
             printf("Must be root\n");
-            return 0;
-        }
-
-        if (!hwbase)
             return 1;
+        }
 
         if ((fd = open ("/dev/mem", O_RDWR | O_SYNC | O_CLOEXEC) ) < 0)
         {
@@ -785,22 +696,21 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        gpio_base = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE_OFFSET+hwbase);
+        chip->base = (uint32_t *)mmap(0, chip->reg_size,
+                                      PROT_READ|PROT_WRITE, MAP_SHARED,
+                                      fd, chip->reg_base);
     }
 
-    if (gpio_base == (uint32_t *)-1)
+    if (chip->base == (uint32_t *)-1)
     {
         printf("mmap (GPIO) failed: %s\n", strerror (errno));
         return 1;
     }
 
-    is_2711 = (*(gpio_base+GPPUPPDN3) != 0x6770696f);
-    gpio_alt_names = is_2711 ? gpio_alt_names_2711 : gpio_alt_names_2708;
-
     if (set || get)
     {
         int pin;
-        for (pin = GPIO_MIN; pin <= GPIO_MAX; pin++)
+        for (pin = 0; pin < chip->gpio_count; pin++)
         {
             if (all_pins)
             {
@@ -826,7 +736,183 @@ int main(int argc, char *argv[])
     }
 
     if (raw)
-        print_raw_gpio_regs();
+        print_raw_gpio_regs(chip);
+
+  deprecation_check:
+    if (isatty(STDOUT_FILENO))
+    {
+        fd = open("/tmp/raspi-gpio-deprecated", O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+        if (fd >= 0)
+        {
+            printf("[ raspi-gpio is deprecated - try `pinctrl` instead ]\n");
+            close(fd);
+        }
+    }
 
     return 0;
+}
+
+static int bcm2835_get_level(struct gpio_chip *chip, unsigned int gpio)
+{
+    if (gpio >= chip->gpio_count)
+        return -1;
+
+    return (chip->base[GPLEV0 + (gpio / 32)] >> (gpio % 32)) & 1;
+}
+
+static int bcm2835_get_fsel(struct gpio_chip *chip, unsigned int gpio)
+{
+    /* GPFSEL0-5 with 10 sels per reg, 3 bits per sel (so bits 0:29 used) */
+    uint32_t reg = GPFSEL0 + (gpio / 10);
+    uint32_t lsb = (gpio % 10) * 3;
+
+    if (gpio < chip->gpio_count)
+    {
+        switch ((chip->base[reg] >> lsb) & 7)
+        {
+        case 0: return FUNC_IP;
+        case 1: return FUNC_OP;
+        case 2: return FUNC_A5;
+        case 3: return FUNC_A4;
+        case 4: return FUNC_A0;
+        case 5: return FUNC_A1;
+        case 6: return FUNC_A2;
+        case 7: return FUNC_A3;
+        }
+    }
+
+    return -1;
+}
+
+static int bcm2835_get_pull(struct gpio_chip *chip, unsigned int gpio)
+{
+    /* This is a write-only mechanism */
+    return PULL_UNSET;
+}
+
+static int bcm2835_set_level(struct gpio_chip *chip, unsigned int gpio, int level)
+{
+    if (gpio >= chip->gpio_count)
+        return -1;
+
+    chip->base[(level ? GPSET0 : GPCLR0) + (gpio / 32)] = (1 << (gpio % 32));
+
+    return 0;
+}
+
+static int bcm2835_set_fsel(struct gpio_chip *chip, unsigned int gpio, int fsel)
+{
+    /* GPFSEL0-5 with 10 sels per reg, 3 bits per sel (so bits 0:29 used) */
+    uint32_t reg = GPFSEL0 + (gpio / 10);
+    uint32_t lsb = (gpio % 10) * 3;
+
+    switch (fsel)
+    {
+    case FUNC_IP: fsel = 0; break;
+    case FUNC_OP: fsel = 1; break;
+    case FUNC_A0: fsel = 4; break;
+    case FUNC_A1: fsel = 5; break;
+    case FUNC_A2: fsel = 6; break;
+    case FUNC_A3: fsel = 7; break;
+    case FUNC_A4: fsel = 3; break;
+    case FUNC_A5: fsel = 2; break;
+    default:
+        return -1;
+    }
+
+    if (gpio < chip->gpio_count)
+    {
+        chip->base[reg] = (chip->base[reg] & ~(0x7 << lsb)) | (fsel << lsb);
+        return 0;
+    }
+
+    return -1;
+}
+
+static int bcm2835_set_pull(struct gpio_chip *chip, unsigned int gpio, int pull)
+{
+    int clkreg = GPPUDCLK0 + (gpio / 32);
+    int clkbit = 1 << (gpio % 32);
+
+    if (gpio >= chip->gpio_count)
+        return -1;
+
+    if (pull < 0 || pull > 2) return -1;
+
+    chip->base[GPPUD] = pull;
+    usleep(10);
+    chip->base[clkreg] = clkbit;
+    usleep(10);
+    chip->base[GPPUD] = 0;
+    usleep(10);
+    chip->base[clkreg] = 0;
+    usleep(10);
+
+    return 0;
+}
+
+static int bcm2835_next_reg(int reg)
+{
+    if (reg < 0)
+        return 0;
+    else if (reg == GPPUDCLK1)
+        return -1;
+    return reg + 1;
+}
+
+static int bcm2711_get_pull(struct gpio_chip *chip, unsigned int gpio)
+{
+    int reg = GPPUPPDN0 + (gpio / 16);
+    int lsb = (gpio % 16) * 2;
+
+    if (gpio >= chip->gpio_count)
+        return -1;
+
+    switch ((chip->base[reg] >> lsb) & 3)
+    {
+    case 0: return PULL_NONE;
+    case 1: return PULL_UP;
+    case 2: return PULL_DOWN;
+    }
+    return -1;
+}
+
+static int bcm2711_set_pull(struct gpio_chip *chip, unsigned int gpio, int pull)
+{
+    int reg = GPPUPPDN0 + (gpio / 16);
+    int lsb = (gpio % 16) * 2;
+
+    if (gpio >= chip->gpio_count)
+        return -1;
+
+    switch (pull)
+    {
+    case PULL_NONE:
+        pull = 0;
+        break;
+    case PULL_UP:
+        pull = 1;
+        break;
+    case PULL_DOWN:
+        pull = 2;
+        break;
+    default:
+        return -1;
+    }
+
+    chip->base[reg] = (chip->base[reg] & ~(3 << lsb)) | (pull << lsb);
+
+    return 0;
+}
+
+static int bcm2711_next_reg(int reg)
+{
+    /* Skip over non-GPIO registers */
+    if (reg < 0)
+        return 0;
+    else if (reg == GPPUPPDN3)
+        return -1;
+    else if (reg == GPPUDCLK1)
+        return GPPUPPDN0;
+    return reg + 1;
 }
