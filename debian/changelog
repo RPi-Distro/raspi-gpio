@@ -1,3 +1,25 @@
+raspi-gpio (0.20231127) bookworm; urgency=medium
+
+  [ Phil Elwell ]
+  * Added simple build instructions
+  * Fix typo in README
+  * Extensive overhaul
+  * Fix typo: "pin-pad" -> "in-pad"
+  * Return 1 in all error paths
+  * Steer users towards pinctrl
+
+  [ Ben Nuttall ]
+  * Add usage text to readme (#15)
+
+  [ Ryan Whelan ]
+  * Update raw output to show pull registers on 2711
+
+  [ Serge Schneider ]
+  * Bump compatibility level to 12
+  * Update maintainer information
+
+ -- Serge Schneider <serge@raspberrypi.com>  Mon, 27 Nov 2023 15:44:45 +0000
+
 raspi-gpio (0.20191001) buster; urgency=medium
 
   [ Andrew Scheller ]
