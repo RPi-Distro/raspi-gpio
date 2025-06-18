@@ -1,5 +1,9 @@
 # raspi-gpio
 
+**This tool is no longer maintained or supported. It has been replaced by the newer [pinctrl](https://github.com/raspberrypi/utils/tree/master/pinctrl) tool.** 
+
+----
+
 Tool to help debug / hack at the BCM283x GPIO. 
 
 You can dump the state of a GPIO or (all GPIOs).
